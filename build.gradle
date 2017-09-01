@@ -1,0 +1,34 @@
+plugins {
+    id 'java'
+    id 'groovy'
+}
+
+group = 'io.github.guggle'
+version = '0.1.0'
+
+repositories {
+    jcenter()
+}
+
+subprojects {
+    apply plugin: 'groovy'
+    apply plugin: 'maven'
+    apply plugin: 'maven-publish'
+
+    group = project.parent.group
+    version = project.parent.version
+
+    sourceCompatibility = 8
+    targetCompatibility = 8
+    
+    repositories {
+        jcenter()
+    }
+
+    dependencies {
+        compileOnly 'org.codehaus.groovy:groovy-all:2.4.12'
+        testCompile 'org.codehaus.groovy:groovy-all:2.4.12'
+        testCompile 'org.spockframework:spock-core:1.0-groovy-2.4'
+    }
+}
+
