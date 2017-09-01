@@ -5,8 +5,13 @@ import java.util.stream.Stream;
 import java.util.stream.LongStream;
 
 public interface LongCacheView<K extends Permanent<K>> extends KeyView<K> {
-    long value(K key, ToLongFunction<K> generate);
-    long get(K key);
+
+    public interface Holder {
+        long getLong();
+    }
+    
+    Holder value(K key, ToLongFunction<K> generate);
+    Holder get(K key);
     void put(K key, long val);
     LongStream values();
 }

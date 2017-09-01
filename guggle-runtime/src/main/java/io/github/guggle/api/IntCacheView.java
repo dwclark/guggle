@@ -5,8 +5,21 @@ import java.util.stream.Stream;
 import java.util.stream.IntStream;
 
 public interface IntCacheView<K extends Permanent<K>> extends KeyView<K> {
-    int value(K key, ToIntFunction<K> generate);
-    int get(K key);
+
+    public interface Holder {
+        int getInt();
+        
+        default short getShort() {
+            return (short) getInt();
+        }
+        
+        default byte getByte() {
+            return (byte) getInt();
+        }
+    }
+    
+    Holder value(K key, ToIntFunction<K> generate);
+    Holder get(K key);
     void put(K key, int val);
     IntStream values();
 }
