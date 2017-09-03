@@ -58,7 +58,7 @@ public class Expiration {
         return Instant.now().toEpochMilli();
     }
 
-    public static class IntHolder extends Expiration implements IntCacheView.Holder {
+    public static class IntHolder extends Expiration {
         private final int val;
 
         public IntHolder(final Instant start, final int val) {
@@ -66,12 +66,12 @@ public class Expiration {
             this.val = val;
         }
 
-        public int intValue() {
+        public int value() {
             return val;
         }
     }
 
-    public static class LongHolder extends Expiration implements LongCacheView.Holder {
+    public static class LongHolder extends Expiration {
         private final long val;
 
         public LongHolder(final Instant start, final long val) {
@@ -79,12 +79,12 @@ public class Expiration {
             this.val = val;
         }
 
-        public long longValue() {
+        public long value() {
             return val;
         }
     }
 
-    public static class DoubleHolder extends Expiration implements DoubleCacheView.Holder {
+    public static class DoubleHolder extends Expiration {
         private final double val;
 
         public DoubleHolder(final Instant start, final double val) {
@@ -92,21 +92,21 @@ public class Expiration {
             this.val = val;
         }
 
-        public double doubleValue() {
+        public double value() {
             return val;
         }
     }
 
-    public static class ObjectHolder<V> extends Expiration implements ObjectCacheView.Holder<V> {
-        private final V val;
+    public static class ObjectHolder extends Expiration {
+        private final Object val;
 
-        public ObjectHolder(final Instant start, final V val) {
+        public ObjectHolder(final Instant start, final Object val) {
             super(start);
             this.val = val;
         }
 
-        public V get(final Class<V> type) {
-            return type.cast(val);
+        public Object value() {
+            return val;
         }
     }
 
@@ -122,7 +122,7 @@ public class Expiration {
         return new DoubleHolder(start, val);
     }
 
-    public static <V> ObjectHolder<V> objectHolder(final Instant start, final V val) {
-        return new ObjectHolder<>(start, val);
+    public static ObjectHolder objectHolder(final Instant start, final Object val) {
+        return new ObjectHolder(start, val);
     }
 }
