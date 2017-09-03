@@ -4,6 +4,7 @@ import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import io.github.guggle.api.*;
 import static io.github.guggle.api.Expires.*;
+import io.github.guggle.utils.TimeUnits;
 
 public class Expiration {
     private final static int DIRTY = Integer.MIN_VALUE;
@@ -26,7 +27,7 @@ public class Expiration {
         lastAccessed = DIRTY;
     }
 
-    public boolean expired(final Expires expires, final long interval, final ChronoUnit units,
+    public boolean expired(final Expires expires, final TimeUnits timeUnits,
                            final Instant asOf, final Instant start) {
         if(lastAccessed == DIRTY) {
             return true;
@@ -37,7 +38,7 @@ public class Expiration {
         }
 
         final int tmp = (expires == FIXED) ? created : lastAccessed;
-        final Instant expiresAt = Instant.ofEpochMilli(expand(tmp) + start.toEpochMilli()).plus(interval, units);
+        final Instant expiresAt = Instant.ofEpochMilli(expand(tmp) + start.toEpochMilli()).plus(timeUnits.getInterval(), timeUnits.getChronoUnit());
         return expiresAt.isBefore(asOf);
     }
 
@@ -65,7 +66,7 @@ public class Expiration {
             this.val = val;
         }
 
-        public int getInt() {
+        public int intValue() {
             return val;
         }
     }
@@ -78,7 +79,7 @@ public class Expiration {
             this.val = val;
         }
 
-        public long getLong() {
+        public long longValue() {
             return val;
         }
     }
@@ -91,7 +92,7 @@ public class Expiration {
             this.val = val;
         }
 
-        public double getDouble() {
+        public double doubleValue() {
             return val;
         }
     }

@@ -1,20 +1,18 @@
 package io.github.guggle.api;
 
-import java.util.function.ToDoubleFunction;
-import java.util.stream.Stream;
 import java.util.stream.DoubleStream;
 
 public interface DoubleCacheView<K extends Permanent<K>> extends KeyView<K> {
 
     public interface Holder {
-        double getDouble();
+        double doubleValue();
 
-        default float getFloat() {
-            return (float) getDouble();
+        default float floatValue() {
+            return (float) doubleValue();
         }
     }
     
-    double value(K key, ToDoubleFunction<K> generate);
+    double value(K key);
     double get(K key);
     void put(K key, double val);
     DoubleStream values();
