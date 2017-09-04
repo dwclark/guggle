@@ -8,4 +8,5 @@ public interface KeyView<K extends Permanent<K>> {
     void dirty(K key);
     Stream<K> keys();
     long size();
+    void clear();
 }

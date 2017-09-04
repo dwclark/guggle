@@ -159,7 +159,7 @@ public class AllCaches implements CacheRegistry {
             backing.remove(key);
         }
 
-        protected void removeAll() {
+        public void clear() {
             Set<K> toRemove = keys().collect(Collectors.toSet());
             for(K k : toRemove) {
                 backing.remove(k);
@@ -478,7 +478,7 @@ public class AllCaches implements CacheRegistry {
                     final View<?,?> v = all.get(methodId);
                     final View<?,?> previous = v.copy();
                     v.backing = val;
-                    previous.removeAll();
+                    previous.clear();
                 }
                 else if(configs.containsKey(methodId)) {
                     final View<?,?> v = configs.get(methodId);
@@ -496,7 +496,7 @@ public class AllCaches implements CacheRegistry {
                     if(v.backing == defaultBacking) {
                         final View<?,?> previous = v.copy();
                         v.backing = val;
-                        previous.removeAll();
+                        previous.clear();
                     }
                 }
 
