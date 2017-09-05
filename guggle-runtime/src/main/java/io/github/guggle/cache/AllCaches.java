@@ -24,6 +24,7 @@ public class AllCaches implements CacheRegistry {
         return instance;
     }
 
+    private static final ThreadLocal<Map<Class<?>,Object>> searchers = ThreadLocal.withInitial(() -> new HashMap<>());
     private static final int CORES = Runtime.getRuntime().availableProcessors();
 
     private final Instant start = Instant.now();
@@ -582,5 +583,23 @@ public class AllCaches implements CacheRegistry {
                 all.put(methodId, ret);
                 return ret;
             });
+    }
+
+    public <T> T searcher(final Class<T> type) {
+        final Map<Class<?>,Object> map = searchers.get();
+        Object found = map.get(type);
+        if(found != null) {
+            return type.cast(found);
+        }
+        else {
+            try {
+                T instance = type.newInstance();
+                map.put(type, instance);
+                return instance;
+            }
+            catch(InstantiationException | IllegalAccessException e) {
+                throw new RuntimeException(e);
+            }
+        }
     }
 }

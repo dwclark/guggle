@@ -18,10 +18,11 @@ public class CacheTransformation extends AbstractASTTransformation {
     AnnotationNode annotationNode;
     MethodNode methodNode;
     ClassNode declaringClassNode;
+    SourceUnit sourceUnit;
     
-    public void visit(ASTNode[] astNodes, SourceUnit source) {
+    public void visit(final ASTNode[] astNodes, final SourceUnit sourceUnit) {
         init(astNodes, sourceUnit);
-
+        this.sourceUnit = sourceUnit;
         initNodes(astNodes);
     }
 
@@ -30,13 +31,15 @@ public class CacheTransformation extends AbstractASTTransformation {
         this.methodNode = (MethodNode) astNodes[1];
         this.declaringClassNode = methodNode.getDeclaringClass();
 
-        MethodNode copiedMethod = new MethodNode(methodNode.getName() + "Copied",
-                                                 methodNode.getModifiers(),
-                                                 copyClassNode(methodNode.getReturnType()),
-                                                 copyParameters(methodNode.getParameters()),
-                                                 ClassNode.EMPTY_ARRAY,
-                                                 returnS(constX(null)));
-        declaringClassNode.addMethod(copiedMethod);
+        // MethodNode copiedMethod = new MethodNode(methodNode.getName() + "Copied",
+        //                                          methodNode.getModifiers(),
+        //                                          copyClassNode(methodNode.getReturnType()),
+        //                                          copyParameters(methodNode.getParameters()),
+        //                                          ClassNode.EMPTY_ARRAY,
+        //                                          returnS(constX(null)));
+        // declaringClassNode.addMethod(copiedMethod);
+
+        sourceUnit.getAST().addClass(Utils.abstractBaseClass(methodNode));
     }
 
         

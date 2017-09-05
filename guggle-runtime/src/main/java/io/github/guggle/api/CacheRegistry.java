@@ -30,4 +30,6 @@ public interface CacheRegistry {
     public static CacheRegistry instance() {
         return AllCaches.instance();
     }
+
+    public <T> T searcher(Class<T> type);
 }

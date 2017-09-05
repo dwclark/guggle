@@ -45,6 +45,6 @@ public final class MethodId {
 
     @Override
     public int hashCode() {
-        return Fnv.start().hashObject(type).hashObject(method).hashCollection(args).finish();
+        return Fnv.start().hashObject(type).hashObject(method).hashObject(args).finish();
     }
 }

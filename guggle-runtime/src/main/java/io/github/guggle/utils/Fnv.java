@@ -46,6 +46,10 @@ public class Fnv {
     }
 
     public Fnv hashObject(final Object o) {
+        if(o == null) {
+            return this;
+        }
+        
         if(o instanceof Number) {
             if(o instanceof Byte) {
                 hashByte((Byte) o);
@@ -76,14 +80,6 @@ public class Fnv {
         return this;
     }
 
-    public Fnv hashCollection(final Collection<?> c) {
-        for(Object o : c) {
-            hashObject(o);
-        }
-
-        return this;
-    }
-
     public int finish() {
         return _tl.get().pop();
     }
@@ -100,7 +96,7 @@ public class Fnv {
 
         Fnv push() {
             ++index;
-            if(index < (fnvs.size() - 1)) {
+            if(index > (fnvs.size() - 1)) {
                 fnvs.add(new Fnv());
             }
 
