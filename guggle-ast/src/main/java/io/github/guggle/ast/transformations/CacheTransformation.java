@@ -31,16 +31,14 @@ public class CacheTransformation extends AbstractASTTransformation {
         this.methodNode = (MethodNode) astNodes[1];
         this.declaringClassNode = methodNode.getDeclaringClass();
 
-        // MethodNode copiedMethod = new MethodNode(methodNode.getName() + "Copied",
-        //                                          methodNode.getModifiers(),
-        //                                          copyClassNode(methodNode.getReturnType()),
-        //                                          copyParameters(methodNode.getParameters()),
-        //                                          ClassNode.EMPTY_ARRAY,
-        //                                          returnS(constX(null)));
-        // declaringClassNode.addMethod(copiedMethod);
-
-        sourceUnit.getAST().addClass(Utils.abstractBaseClass(methodNode));
+        final InnerClassNode base = Utils.abstractBaseClass(methodNode);
+        sourceUnit.getAST().addClass(base);
+        final InnerClassNode immutable = Utils.immutableClass(methodNode, base);
+        sourceUnit.getAST().addClass(immutable);
+        sourceUnit.getAST().addClass(Utils.searchClass(methodNode, base, immutable));
     }
 
-        
+    //TODO: Add generation functions
+    //TODO: Add cache variables
+    //TODO: Re-write methods to forward to caches
 }

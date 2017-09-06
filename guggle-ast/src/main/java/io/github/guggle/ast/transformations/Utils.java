@@ -22,8 +22,7 @@ class Utils extends AbstractASTTransformation {
     public static final String IMMUTABLE = "Immutable";
     
     public static String innerClassName(final MethodNode methodNode, final String suffix) {
-        return methodNode.getDeclaringClass().getPackageName() + "." +
-            methodNode.getDeclaringClass().getNameWithoutPackage() + "$" +
+        return methodNode.getDeclaringClass().getName() + "$" +
             methodNode.getName().substring(0,1).toUpperCase() +
             methodNode.getName().substring(1) + suffix;
     }
@@ -95,7 +94,7 @@ class Utils extends AbstractASTTransformation {
         final FieldNode[] ret = new FieldNode[types.length];
         for(int i = 0; i < types.length; ++i) {
             final int modifiers = immutable ? (ACC_PRIVATE | ACC_FINAL) : ACC_PRIVATE;
-            ret[i] = new FieldNode("f" + i, ACC_PRIVATE, copyClassNode(types[i]), owner, EmptyExpression.INSTANCE);
+            ret[i] = new FieldNode("f" + i, modifiers, copyClassNode(types[i]), owner, EmptyExpression.INSTANCE);
             owner.addField(ret[i]);
         }
 
@@ -105,7 +104,7 @@ class Utils extends AbstractASTTransformation {
     static MethodNode[] abstractAccessors(final ClassNode owner, final ClassNode[] types) {
         final MethodNode[] ret = new MethodNode[types.length];
         for(int i = 0; i < types.length; ++i) {
-            ret[i] = new MethodNode("p" + i, ACC_PUBLIC | ACC_ABSTRACT, copyClassNode(types[i]),
+            ret[i] = new MethodNode("m" + i, ACC_PUBLIC | ACC_ABSTRACT, copyClassNode(types[i]),
                                     Parameter.EMPTY_ARRAY, ClassNode.EMPTY_ARRAY, EmptyStatement.INSTANCE);
             owner.addMethod(ret[i]);
         }
@@ -116,7 +115,7 @@ class Utils extends AbstractASTTransformation {
     static MethodNode[] accessors(final ClassNode owner, final FieldNode[] fieldNodes) {
         final MethodNode[] ret = new MethodNode[fieldNodes.length];
         for(int i = 0; i < fieldNodes.length; ++i) {
-            ret[i] = new MethodNode("p" + i, ACC_PUBLIC, copyClassNode(fieldNodes[i].getType()),
+            ret[i] = new MethodNode("m" + i, ACC_PUBLIC, copyClassNode(fieldNodes[i].getType()),
                                     Parameter.EMPTY_ARRAY, ClassNode.EMPTY_ARRAY,
                                     returnS(fieldX(fieldNodes[i])));
             owner.addMethod(ret[i]);
@@ -288,7 +287,8 @@ class Utils extends AbstractASTTransformation {
         final ClassNode[] types = parameterTypes(methodNode.getParameters());
         final FieldNode[] fieldNodes = fieldNodes(icn, types, false);
         final MethodNode[] accessors = accessors(icn, fieldNodes);
-
+        final MethodNode setter = setter(icn, fieldNodes);
+        
         final ArgumentListExpression fieldArgs = new ArgumentListExpression();
         for(FieldNode fnode : fieldNodes) {
             fieldArgs.addExpression(fieldX(fnode));
@@ -308,6 +308,7 @@ class Utils extends AbstractASTTransformation {
                                                       superNode);
         final ClassNode[] types = parameterTypes(methodNode.getParameters());
         final FieldNode[] fieldNodes = fieldNodes(icn, types, true);
+        final MethodNode[] accessors = accessors(icn, fieldNodes);
         final ConstructorNode constructor = constructor(icn, fieldNodes);
         icn.addMethod(new MethodNode("permanent", ACC_PUBLIC, icn,
                                      Parameter.EMPTY_ARRAY, ClassNode.EMPTY_ARRAY, returnS(varX("this"))));

@@ -30,6 +30,6 @@ public interface IntCacheView<K extends Permanent<K>> extends KeyView<K> {
     }
 
     default boolean getBoolean(final K key) {
-        return get(key) != 0 ? true : false;
+        return get(key) == 1 ? true : false;
     }
 }
