@@ -6,9 +6,10 @@ class CacheSpec extends Specification {
 
     def basic() {
         setup:
-        def basic = new BasicCached();
-        //basic.first(1, '2', ["1": [1,2,3] ]);
-        //basic.firstCopied(1, '2', ["1": [1,2,3]]);
-        null;
+        def cv1 = new CacheValue1();
+
+        expect:
+        cv1.myToString(1) == "1";
+        cv1.myToString(1) == "1";
     }
 }

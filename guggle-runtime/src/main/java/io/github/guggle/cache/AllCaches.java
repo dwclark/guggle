@@ -398,7 +398,7 @@ public class AllCaches implements CacheRegistry {
 
         public V value(final K key) {
             final Expiration.ObjectHolder holder = (Expiration.ObjectHolder) backing.get(key);
-            return valueType.cast((holder != null) ? holder : generate(key));
+            return valueType.cast((holder != null) ? holder.value() : generate(key).value());
         }
         
         public V get(final K key) {

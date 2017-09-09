@@ -9,31 +9,26 @@ class BasicValue {
     int two;
 }
 
-@CompileStatic
-class BasicCached {
+class TestCache {
+    final Map m = [:];
 
-    @Cache
-    String first(int one, String two, Map<String,List<String>> map) {
-        return "${one} ${two} ${map}";
+    void testKey(final Object k) {
+        assert(!m.containsKey(k));
     }
 
-    // @Cache
-    // String second(String one, Map<? extends List,? extends Number> map) {
-    //     return "${one} ${map}";
-    // }
+    void place(final Object k, final Object v) {
+        m[k] = v;
+    }
+}
 
-    // @Cache
-    // Double third(Map<String, List<List<String>>> map) {
-    //     return 0.0d;
-    // }
+@CompileStatic
+class CacheValue1 extends TestCache {
 
-    // @Cache
-    // Map<String,Integer> fourth(Map<?, List<List<? extends Number>>> map) {
-    //     return [:];
-    // }
-
-    // @Cache
-    // List<String> fifth(final BasicValue bvalue) {
-    //     return [ 'foo' ];
-    // }
+    @Cache
+    public String myToString(final int i) {
+        println("Called myToString(${i})");
+        testKey(i);
+        place(i, i as String);
+        return i as String;
+    }
 }
