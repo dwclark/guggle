@@ -21,6 +21,7 @@ class CacheGeneration extends BaseGeneration {
     FieldNode functionFieldNode;
     String cacheFieldName;
     FieldNode cacheFieldNode;
+    CacheInfo cacheInfo;
     
     public CacheGeneration(final MethodNode methodNode, final ConstructorCallExpression lifetimeConstructorCall) {
         super(methodNode);
@@ -65,7 +66,9 @@ class CacheGeneration extends BaseGeneration {
         private String _cacheMethodName;
         private ClassNode _cacheTypeNode;
         private ArgumentListExpression _cacheFactoryArgs;
-
+        private String _valueMethod;
+        private boolean _valueNeedsCast;
+        
         public String getMethodName() {
             if(_methodName == null) {
                 populateFunctionInfo();
@@ -104,6 +107,19 @@ class CacheGeneration extends BaseGeneration {
             }
 
             return _cacheFactoryArgs;
+        }
+
+        public String getValueMethod() {
+            if(_valueMethod == null) {
+                populateCacheInfo();
+            }
+
+            return _valueMethod;
+        }
+
+        public boolean getValueNeedsCast() {
+            getValueMethod();
+            return _valueNeedsCast;
         }
 
         private void populateFunctionInfo() {
@@ -150,6 +166,18 @@ class CacheGeneration extends BaseGeneration {
         }
         
         void populateCacheInfo() {
+            if(returnType == ClassHelper.boolean_TYPE) _valueMethod = "booleanValue";
+            else if(returnType == ClassHelper.byte_TYPE) _valueMethod = "byteValue";
+            else if(returnType == ClassHelper.short_TYPE) _valueMethod = "shortValue";
+            else if(returnType == ClassHelper.int_TYPE) _valueMethod = "value";
+            else if(returnType == ClassHelper.long_TYPE) _valueMethod = "value";
+            else if(returnType == ClassHelper.float_TYPE) _valueMethod = "floatValue";
+            else if(returnType == ClassHelper.double_TYPE) _valueMethod = "doubleValue";
+            else {
+                _valueMethod = "value";
+                _valueNeedsCast = true;
+            }
+            
             _cacheFactoryArgs = new ArgumentListExpression();
             final FieldNode methodIdFieldNode = baseNode.getFields().stream().filter(f -> f.getName().equals("METHOD_ID")).findFirst().get();
             if(methodIdFieldNode == null) {
@@ -195,7 +223,7 @@ class CacheGeneration extends BaseGeneration {
     @Override
     public void pre() {
         super.pre();
-        final int modifiers = ACC_PRIVATE | (methodNode.isStatic() ? ACC_STATIC : ACC_PRIVATE);
+        final int modifiers = ACC_PUBLIC | (methodNode.isStatic() ? ACC_STATIC : 0);
         this.forwardingMethodNode = new MethodNode(forwardingMethodName, modifiers,
                                                    copy(returnType), cloneParams(parameters),
                                                    ClassNode.EMPTY_ARRAY, methodNode.getCode());
@@ -206,13 +234,13 @@ class CacheGeneration extends BaseGeneration {
     public void generate() {
         super.generate();
 
-        final CacheInfo cacheInfo = new CacheInfo();
-        functionClass(cacheInfo);
+        this.cacheInfo = new CacheInfo();
+        functionClass();
         functionField();
-        cacheField(cacheInfo);
+        cacheField();
     }
 
-    void functionClass(final CacheInfo cacheInfo) {
+    void functionClass() {
         this.functionNode = new InnerClassNode(outerClassNode, functionClassName,
                                                ACC_PUBLIC | ACC_STATIC,
                                                ClassHelper.OBJECT_TYPE);
@@ -225,8 +253,10 @@ class CacheGeneration extends BaseGeneration {
         
         final ArgumentListExpression alist = new ArgumentListExpression();
         for(int i = 0; i < parameters.length; ++i) {
-            final MethodCallExpression mcall = new MethodCallExpression(varX(parameters[0]), "m" + i, ArgumentListExpression.EMPTY_ARGUMENTS);
+            final String theName = "m" + i;
+            final MethodCallExpression mcall = new MethodCallExpression(varX(functionParameters[0]), theName, ArgumentListExpression.EMPTY_ARGUMENTS);
             mcall.setImplicitThis(false);
+            mcall.setMethodTarget(baseNode.getMethods().stream().filter(m -> m.getName().equals(theName)).findFirst().get());
             alist.addExpression(mcall);
         }
 
@@ -248,12 +278,12 @@ class CacheGeneration extends BaseGeneration {
             functionNode.addConstructor(cnode);
 
             FieldExpression fexpr = new FieldExpression(fnode);
-            final MethodCallExpression mcall = new MethodCallExpression(fexpr, methodNode.getName(), alist);
+            final MethodCallExpression mcall = new MethodCallExpression(fexpr, forwardingMethodName, alist);
             mcall.setImplicitThis(false);
-            mcall.setMethodTarget(methodNode);
+            mcall.setMethodTarget(forwardingMethodNode);
             mcall.setGenericsTypes(new GenericsType[] { new GenericsType(baseNode) });
             functionNode.addMethod(new MethodNode(cacheInfo.getMethodName(), ACC_PUBLIC, returnType,
-                                         functionParameters, ClassNode.EMPTY_ARRAY, returnS(mcall)));
+                                                  functionParameters, ClassNode.EMPTY_ARRAY, returnS(mcall)));
         }
     }
 
@@ -275,7 +305,7 @@ class CacheGeneration extends BaseGeneration {
         }
     }
     
-    void cacheField(final CacheInfo cacheInfo) {
+    void cacheField() {
         if(cacheFieldName == null) {
             throw new IllegalStateException("cacheFieldName has not been populated");
         }
@@ -323,8 +353,19 @@ class CacheGeneration extends BaseGeneration {
         setterCall.setImplicitThis(false);
         block.addStatement(new ExpressionStatement(setterCall));
         
-        final MethodCallExpression mcall = new MethodCallExpression(fieldX(cacheFieldNode), "value", varX("searcher"));
+        final MethodCallExpression mcall = new MethodCallExpression(fieldX(cacheFieldNode), cacheInfo.getValueMethod(), args(varX("searcher")));
         mcall.setImplicitThis(false);
-        methodNode.setCode(returnS(mcall));
+        mcall.setMethodTarget(cacheInfo.getCacheTypeNode().getMethods().stream().filter(m -> m.getName().equals(cacheInfo.getValueMethod())).findFirst().get());
+
+        if(cacheInfo.getValueNeedsCast()) {
+            final CastExpression retCast = new CastExpression(copy(returnType), mcall);
+            retCast.setStrict(true);
+            block.addStatement(returnS(retCast));
+        }
+        else {
+            block.addStatement(returnS(mcall));
+        }
+   
+        methodNode.setCode(block);
     }
 }

@@ -12,9 +12,9 @@ public interface DoubleCacheView<K extends Permanent<K>> extends KeyView<K> {
     default void put(K key, float val) {
         put(key, (double) val);
     }
-
-    default float getFloat(K key) {
-        return (float) get(key);
+    
+    default float floatValue(K key) {
+        return (float) value(key);
     }
 
 }

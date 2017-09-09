@@ -56,21 +56,11 @@ public class CacheTransformation extends AbstractASTTransformation {
         final CacheGeneration generator = new CacheGeneration(methodNode, lifetimeConstructor());
         generator.pre();
         generator.generate();
+        generator.post();
         sourceUnit.getAST().addClass(generator.baseNode);
         sourceUnit.getAST().addClass(generator.immutableNode);
         sourceUnit.getAST().addClass(generator.searchNode);
         sourceUnit.getAST().addClass(generator.functionNode);
-        // this.base = Utils.abstractBaseClass(methodNode);
-        // sourceUnit.getAST().addClass(base);
-        // this.immutable = Utils.immutableClass(methodNode, base);
-        // sourceUnit.getAST().addClass(immutable);
-        // this.search = Utils.searchClass(methodNode, base, immutable);
-        // sourceUnit.getAST().addClass(search);
-        // this.cacheField = makeCacheField();
-        // this.rewrittenMethod = Utils.rewriteMethod(methodNode, cacheField, search);
-        // this.function = Utils.functionClass(methodNode, base);
-        // sourceUnit.getAST().addClass(function);
-        // this.functionFieldNode = makeFunctionField();
     }
 
     Expires populateExpires() {
