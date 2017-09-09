@@ -25,7 +25,7 @@ public interface CacheRegistry {
 
     public <K extends Permanent<K>> LongCacheView<K> longView(Class<K> keyType, MethodId methodId, ToLongFunction<K> func, Lifetime lifetime);
 
-    public <K extends Permanent<K>, V> ObjectCacheView<K,V> objectView(Class<K> keyType, Class<V> valueType, MethodId methodId, Function<K,V> func, Lifetime lifetime);
+    public <K extends Permanent<K>, V> ObjectCacheView<K,V> objectView(Class<K> keyType, MethodId methodId, Function<K,V> func, Lifetime lifetime, Class<V> valueType);
 
     public static CacheRegistry instance() {
         return AllCaches.instance();

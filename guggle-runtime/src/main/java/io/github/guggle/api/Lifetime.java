@@ -1,6 +1,7 @@
 package io.github.guggle.api;
 
 import io.github.guggle.utils.TimeUnits;
+import java.util.concurrent.TimeUnit;
 
 public final class Lifetime {
 
@@ -21,7 +22,6 @@ public final class Lifetime {
             refresh = val.refresh;
             units = val.units;
             maxSize = val.maxSize;
-            
             return this;
         }
 
@@ -57,6 +57,10 @@ public final class Lifetime {
             return this;
         }
 
+        public Builder units(final long val, final TimeUnit timeUnit) {
+            return units(new TimeUnits(val, timeUnit));
+        }
+        
         public Builder units(final TimeUnits val) {
             units = val;
             return this;
@@ -83,6 +87,13 @@ public final class Lifetime {
         this.maxSize = maxSize;
     }
 
+    public Lifetime(final Expires expires,
+                    final Refresh refresh,
+                    final long interval,
+                    final TimeUnit timeUnit,
+                    final Integer maxSize) {
+        this(expires, refresh, new TimeUnits(interval, timeUnit), maxSize);
+    }
     
     public Expires getExpires() {
         return expires;

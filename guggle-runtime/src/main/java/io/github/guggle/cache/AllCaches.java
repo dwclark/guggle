@@ -24,8 +24,6 @@ public class AllCaches implements CacheRegistry {
         return instance;
     }
 
-    private static final int CORES = Runtime.getRuntime().availableProcessors();
-
     private final Instant start = Instant.now();
     private final Map<MethodId, View<?,?>> _all = new HashMap<>();
     private final Map<MethodId, View<?,?>> _configs = new HashMap<>();
@@ -38,9 +36,10 @@ public class AllCaches implements CacheRegistry {
     private volatile TimeUnits expirationInterval = TimeUnits.minutes(1L);
     
     private AllCaches() {
-        ThreadPoolExecutor tpe = new ThreadPoolExecutor(Math.max(CORES / 4, 1), CORES,
+        final int cores = Runtime.getRuntime().availableProcessors();
+        ThreadPoolExecutor tpe = new ThreadPoolExecutor(Math.max(cores / 4, 1), cores,
                                                         30L, TimeUnit.SECONDS,
-                                                        new ArrayBlockingQueue<>(CORES * 4),
+                                                        new ArrayBlockingQueue<>(cores * 4),
                                                         new ThreadPoolExecutor.CallerRunsPolicy());
         tpe.allowCoreThreadTimeOut(true);
         workerPool = tpe;
@@ -570,8 +569,8 @@ public class AllCaches implements CacheRegistry {
             });
     }
 
-    public <K extends Permanent<K>, V> ObjectCacheView<K,V> objectView(final Class<K> keyType, final Class<V> valueType,
-                                                                       final MethodId methodId, final Function<K,V> func, final Lifetime lifetime) {
+    public <K extends Permanent<K>, V> ObjectCacheView<K,V> objectView(final Class<K> keyType, final MethodId methodId,
+                                                                       final Function<K,V> func, final Lifetime lifetime, final Class<V> valueType) {
         return withConfigLock((all,configs) -> {
                 if(all.containsKey(methodId)) {
                     return (ObjectView<K,V>) all.get(methodId);

@@ -9,10 +9,14 @@ public class Fnv {
     public static final int MIX = 16_777_619;
 
     private int next = INIT;
-
+    
     public Fnv hashByte(final byte b) {
         next = (next * MIX) ^ b;
         return this;
+    }
+
+    public Fnv hashBoolean(final boolean b) {
+        return hashByte((byte) (b ? 1 : 0));
     }
 
     public Fnv hashShort(final short s) {
@@ -72,6 +76,9 @@ public class Fnv {
             else {
                 hashInt(o.hashCode());
             }
+        }
+        else if(o instanceof Boolean) {
+            hashBoolean((Boolean) o);
         }
         else {
             hashInt(o.hashCode());

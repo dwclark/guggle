@@ -2,7 +2,7 @@ package io.github.guggle.ast.transformations;
 
 import io.github.guggle.api.Permanent;
 import io.github.guggle.api.MethodId;
-import io.github.guggle.utils.Fnv;
+import io.github.guggle.utils.*;
 import org.codehaus.groovy.ast.*;
 import org.codehaus.groovy.ast.builder.*;
 import org.codehaus.groovy.ast.expr.*;
@@ -14,19 +14,93 @@ import org.codehaus.groovy.syntax.*;
 import org.codehaus.groovy.transform.*;
 import static org.codehaus.groovy.ast.tools.GeneralUtils.*;
 import org.codehaus.groovy.ast.tools.GenericsUtils;
+import java.util.function.*;
 
 class Utils extends AbstractASTTransformation {
 
     public static final String BASE = "Base";
     public static final String SEARCH = "Search";
     public static final String IMMUTABLE = "Immutable";
+    public static final String FUNCTION = "Function";
+    public static final String CACHE = "Cache";
     
     public static String innerClassName(final MethodNode methodNode, final String suffix) {
         return methodNode.getDeclaringClass().getName() + "$" +
             methodNode.getName().substring(0,1).toUpperCase() +
             methodNode.getName().substring(1) + suffix;
     }
-    
+
+    public static String fieldName(final MethodNode methodNode, final String suffix) {
+        final String str = methodNode.getDeclaringClass().getNameWithoutPackage();
+        return str.substring(0, 1).toLowerCase() + str.substring(1) + suffix;
+    }
+
+    public static String functionVarName(final MethodNode methodNode) {
+        return methodNode.getName() + "Function";
+    }
+
+    public static String applyMethodName(final ClassNode returnType) {
+        if(returnType == ClassHelper.boolean_TYPE) {
+            return "applyAsBoolean";
+        }
+        else if(returnType == ClassHelper.byte_TYPE) {
+            return "applyAsByte";
+        }
+        else if(returnType == ClassHelper.short_TYPE) {
+            return "applyAsShort";
+        }
+        else if(returnType == ClassHelper.int_TYPE) {
+            return "applyAsInt";
+        }
+        else if(returnType == ClassHelper.long_TYPE) {
+            return "applyAsLong";
+        }
+        else if(returnType == ClassHelper.float_TYPE) {
+            return "applyAsFloat";
+        }
+        else if(returnType == ClassHelper.double_TYPE) {
+            return "applyAsDouble";
+        }
+        else {
+            return "apply";
+        }
+    }
+
+    public static ClassNode generationClassNode(final ClassNode valueType, final ClassNode returnType) {
+        if(returnType == ClassHelper.boolean_TYPE) {
+            final ClassNode classNode = ClassHelper.make(ToBooleanFunction.class);
+            return GenericsUtils.makeClassSafeWithGenerics(classNode, new GenericsType(valueType));
+        }
+        else if(returnType == ClassHelper.byte_TYPE) {
+            final ClassNode classNode = ClassHelper.make(ToByteFunction.class);
+            return GenericsUtils.makeClassSafeWithGenerics(classNode, new GenericsType(valueType));
+        }
+        else if(returnType == ClassHelper.short_TYPE) {
+            final ClassNode classNode = ClassHelper.make(ToShortFunction.class);
+            return GenericsUtils.makeClassSafeWithGenerics(classNode, new GenericsType(valueType));
+        }
+        else if(returnType == ClassHelper.int_TYPE) {
+            final ClassNode classNode = ClassHelper.make(ToIntFunction.class);
+            return GenericsUtils.makeClassSafeWithGenerics(classNode, new GenericsType(valueType));
+        }
+        else if(returnType == ClassHelper.long_TYPE) {
+            final ClassNode classNode = ClassHelper.make(ToLongFunction.class);
+            return GenericsUtils.makeClassSafeWithGenerics(classNode, new GenericsType(valueType));
+        }
+        else if(returnType == ClassHelper.float_TYPE) {
+            final ClassNode classNode = ClassHelper.make(ToFloatFunction.class);
+            return GenericsUtils.makeClassSafeWithGenerics(classNode, new GenericsType(valueType));
+        }
+        else if(returnType == ClassHelper.double_TYPE) {
+            final ClassNode classNode = ClassHelper.make(ToDoubleFunction.class);
+            return GenericsUtils.makeClassSafeWithGenerics(classNode, new GenericsType(valueType));
+        }
+        else {
+            final ClassNode classNode = ClassHelper.makeWithoutCaching(Function.class);
+            return GenericsUtils.makeClassSafeWithGenerics(classNode, new GenericsType(valueType), new GenericsType(returnType));
+        }
+    }
+
     public void visit(ASTNode[] nodes, SourceUnit unit) {
         throw new UnsupportedOperationException("Not really an ast transformation, this is a convenient/safe" +
                                                 "way to get access to the Opcodes");
@@ -143,9 +217,11 @@ class Utils extends AbstractASTTransformation {
     }
 
     static MethodNode setter(final ClassNode owner, final FieldNode[] fieldNodes) {
-        final MethodNode methodNode = new MethodNode("set", ACC_PUBLIC, ClassHelper.VOID_TYPE,
+        final BlockStatement block = setterAssignments(fieldNodes);
+        block.addStatement(returnS(varX("this")));
+        final MethodNode methodNode = new MethodNode("set", ACC_PUBLIC, owner,
                                                      setterParameters(fieldNodes), ClassNode.EMPTY_ARRAY,
-                                                     setterAssignments(fieldNodes));
+                                                     block);
         owner.addMethod(methodNode);
         return methodNode;
     }
@@ -199,15 +275,19 @@ class Utils extends AbstractASTTransformation {
     }
 
     static MethodNode hashCodeMethod(final ClassNode thisNode, final MethodNode[] methodNodes) {
-        final ClassNode fnvNode = ClassHelper.make(Fnv.class);
+        final ClassNode fnvNode = ClassHelper.makeWithoutCaching(Fnv.class);
         StaticMethodCallExpression firstCall = new StaticMethodCallExpression(fnvNode, "start", ArgumentListExpression.EMPTY_ARGUMENTS);
         MethodCallExpression nextCall = null;
         for(int i = 0; i < methodNodes.length; ++i) {
             MethodNode m = methodNodes[i];
-            if(m.getReturnType() == ClassHelper.byte_TYPE) {
+
+            if(m.getReturnType() == ClassHelper.boolean_TYPE) {
+                nextCall = new MethodCallExpression(nextCall == null ? firstCall : nextCall, "hashBoolean", args(callThisX(m.getName())));
+                nextCall.setImplicitThis(false);
+            }
+            else if(m.getReturnType() == ClassHelper.byte_TYPE) {
                 nextCall = new MethodCallExpression(nextCall == null ? firstCall : nextCall, "hashByte", args(callThisX(m.getName())));
                 nextCall.setImplicitThis(false);
-
             }
             else if(m.getReturnType() == ClassHelper.short_TYPE) {
                 nextCall = new MethodCallExpression(nextCall == null ? firstCall : nextCall, "hashShort", args(callThisX(m.getName())));
@@ -242,6 +322,29 @@ class Utils extends AbstractASTTransformation {
                                               returnS(nextCall));
         thisNode.addMethod(ret);
         return ret;
+    }
+
+    public static MethodNode rewriteMethod(final MethodNode methodNode, final FieldNode cacheNode, final ClassNode searchNode) {
+        final ClassNode outer = methodNode.getDeclaringClass();
+        final int modifiers = ACC_PRIVATE | (methodNode.isStatic() ? ACC_STATIC : ACC_PRIVATE);
+        final MethodNode newMethod = new MethodNode("_internal" + methodNode.getName(), modifiers,
+                                                  copyClassNode(methodNode.getReturnType()), cloneParams(methodNode.getParameters()),
+                                                  ClassNode.EMPTY_ARRAY, methodNode.getCode());
+        outer.addMethod(newMethod);
+
+        //now add cache call into original method
+        final ClassNode typeInstanceNode = ClassHelper.makeWithoutCaching(TypeInstance.class);
+        final ArgumentListExpression smCallArgs = new ArgumentListExpression();
+        smCallArgs.addExpression(classX(searchNode));
+        StaticMethodCallExpression smCall = new StaticMethodCallExpression(typeInstanceNode, "instance", smCallArgs);
+        final CastExpression caster = new CastExpression(searchNode, smCall);
+        caster.setStrict(true);
+        final MethodCallExpression setterCall = new MethodCallExpression(caster, "set", args(methodNode.getParameters()));
+        setterCall.setImplicitThis(false);
+        //setterCall.setMethodTarget(searchNode.getMethods().stream().filter(m -> m.getName().equals("set")).findFirst().get());
+        final MethodCallExpression mcall = new MethodCallExpression(fieldX(cacheNode), "value", setterCall);
+        methodNode.setCode(returnS(mcall));
+        return newMethod;
     }
 
     public static InnerClassNode abstractBaseClass(final MethodNode methodNode) {
@@ -280,7 +383,7 @@ class Utils extends AbstractASTTransformation {
     }
 
     public static InnerClassNode searchClass(final MethodNode methodNode, final InnerClassNode superNode, final InnerClassNode immutable) {
-        final ClassNode outer = copyClassNode(methodNode.getDeclaringClass());
+        final ClassNode outer = methodNode.getDeclaringClass();
         final InnerClassNode icn = new InnerClassNode(outer, innerClassName(methodNode, SEARCH),
                                                       ACC_PUBLIC | ACC_STATIC,
                                                       superNode);
@@ -296,13 +399,13 @@ class Utils extends AbstractASTTransformation {
         
         icn.addMethod(new MethodNode("permanent", ACC_PUBLIC, immutable,
                                      Parameter.EMPTY_ARRAY, ClassNode.EMPTY_ARRAY,
-                                     returnS(ctorX(icn, fieldArgs))));
+                                     returnS(ctorX(immutable, fieldArgs))));
                                      
         return icn;
     }
     
     public static InnerClassNode immutableClass(final MethodNode methodNode, final InnerClassNode superNode) {
-        final ClassNode outer = copyClassNode(methodNode.getDeclaringClass());
+        final ClassNode outer = methodNode.getDeclaringClass();
         final InnerClassNode icn = new InnerClassNode(outer, innerClassName(methodNode, IMMUTABLE),
                                                       ACC_PUBLIC | ACC_STATIC,
                                                       superNode);
@@ -315,4 +418,51 @@ class Utils extends AbstractASTTransformation {
         return icn;
     }
 
+    public static InnerClassNode functionClass(final MethodNode methodNode, final InnerClassNode baseNode) {
+        final ClassNode returnType = copyClassNode(methodNode.getReturnType());
+        final ClassNode outer = methodNode.getDeclaringClass();
+        final InnerClassNode icn = new InnerClassNode(outer, innerClassName(methodNode, FUNCTION),
+                                                      ACC_PUBLIC | ACC_STATIC,
+                                                      ClassHelper.OBJECT_TYPE);
+        icn.addInterface(generationClassNode(baseNode, returnType));
+
+        Parameter[] parameters = new Parameter[1];
+        parameters[0] = new Parameter(baseNode, "val");
+        parameters[0].setModifiers(ACC_FINAL);
+        final ArgumentListExpression alist = new ArgumentListExpression();
+        for(int i = 0; i < methodNode.getParameters().length; ++i) {
+            final MethodCallExpression mcall = new MethodCallExpression(varX(parameters[0]), "m" + i, ArgumentListExpression.EMPTY_ARGUMENTS);
+            mcall.setImplicitThis(false);
+            alist.addExpression(mcall);
+        }
+
+        //TODO: Re-Write method call and change called method here
+        final ClassNode copied = copyClassNode(outer);
+        if(methodNode.isStatic()) {
+            StaticMethodCallExpression mcall = new StaticMethodCallExpression(outer, methodNode.getName(), alist);
+            icn.addMethod(new MethodNode(applyMethodName(returnType), ACC_PUBLIC, returnType,
+                                         parameters, ClassNode.EMPTY_ARRAY, returnS(mcall)));
+        }
+        else {
+            FieldNode fnode = new FieldNode("outer", ACC_PRIVATE | ACC_FINAL,
+                                            copied, icn, EmptyExpression.INSTANCE);
+            icn.addField(fnode);
+            Parameter[] constructorParameters = new Parameter[1];
+            constructorParameters[0] = new Parameter(copied, "val");
+            constructorParameters[0].setModifiers(ACC_FINAL);
+            ConstructorNode cnode = new ConstructorNode(ACC_PUBLIC, constructorParameters, ClassNode.EMPTY_ARRAY,
+                                                        assignS(fieldX(fnode), varX(constructorParameters[0])));
+            icn.addConstructor(cnode);
+
+            FieldExpression fexpr = new FieldExpression(fnode);
+            final MethodCallExpression mcall = new MethodCallExpression(fexpr, methodNode.getName(), alist);
+            mcall.setImplicitThis(false);
+            mcall.setMethodTarget(methodNode);
+            mcall.setGenericsTypes(new GenericsType[] { new GenericsType(baseNode) });
+            icn.addMethod(new MethodNode(applyMethodName(returnType), ACC_PUBLIC, returnType,
+                                         parameters, ClassNode.EMPTY_ARRAY, returnS(mcall)));
+        }
+
+        return icn;
+    }
 }
