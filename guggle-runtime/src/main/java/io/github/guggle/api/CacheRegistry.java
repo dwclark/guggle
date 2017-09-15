@@ -6,6 +6,7 @@ import java.util.function.ToLongFunction;
 import java.util.function.Function;
 import java.util.concurrent.ConcurrentMap;
 import io.github.guggle.cache.AllCaches;
+import io.github.guggle.utils.TimeUnits;
 
 public interface CacheRegistry {
 
@@ -18,6 +19,10 @@ public interface CacheRegistry {
     void backing(MethodId methodId, ConcurrentMap<Object,Object> val);
 
     void backing(ConcurrentMap<Object,Object> val);
+
+    TimeUnits getExpirationInterval();
+
+    void setExpirationInterval(TimeUnits timeUnits);
     
     public <K extends Permanent<K>> DoubleCacheView<K> doubleView(Class<K> keyType, MethodId methodId, ToDoubleFunction<K> func, Lifetime lifetime);
 

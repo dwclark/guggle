@@ -27,7 +27,16 @@ class CacheSpec extends Specification {
         def o = new CacheValue1();
 
         expect:
-        o.longMultiplyBy2(1) == 2L;
-        o.longMultiplyBy2(1) == 2L;
+        o.longMultiplyBy2(1L) == 2L;
+        o.longMultiplyBy2(1L) == 2L;
+    }
+
+    def 'basic double caching'() {
+        setup:
+        def o = new CacheValue1();
+
+        expect:
+        o.doubleMultiplyBy2(1.0d) == 2.0d;
+        o.doubleMultiplyBy2(1.0d) == 2.0d
     }
 }

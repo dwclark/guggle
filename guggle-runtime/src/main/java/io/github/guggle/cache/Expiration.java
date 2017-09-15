@@ -23,9 +23,9 @@ public class Expiration {
         }
     }
 
-    public void dirty() {
-        lastAccessed = DIRTY;
-    }
+    // public void dirty() {
+    //     lastAccessed = DIRTY;
+    // }
 
     public boolean expired(final Expires expires, final TimeUnits timeUnits,
                            final Instant asOf, final Instant start) {

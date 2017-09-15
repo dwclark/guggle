@@ -53,4 +53,15 @@ class CacheValue1 extends TestCache {
         place(tuple, ret);
         return ret;
     }
+
+    @Cache
+    public double doubleMultiplyBy2(final double i) {
+        def tuple = new Tuple(CacheValue1, 'doubleMultiplyBy2', i);
+        double ret = i * 2;
+        println("Called doubleMultiplyBy2(${i})");
+        testKey(tuple);
+        place(tuple, ret);
+        return ret;
+    }
+
 }
