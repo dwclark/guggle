@@ -2,31 +2,31 @@ package io.github.guggle.utils;
 
 import java.util.ArrayList;
 
-final public class Fnv {
+final class OneAtATime {
 
-    public static final int OFFSET = (int) (0xFFFF_FFFF & 2_166_136_261L);
-    public static final int PRIME = 16_777_619;
+    private final static int INIT = 0;
 
     private int hash;
 
-    public Fnv hashByte(final byte b) {
-        hash = hash ^ b;
-        hash = hash * PRIME;
+    public OneAtATime hashByte(final byte val) {
+        hash += val;
+        hash += (hash << 10);
+        hash ^= (hash >>> 6);
         return this;
     }
 
-    public Fnv hashBoolean(final boolean b) {
+    public OneAtATime hashBoolean(final boolean b) {
         hashByte((byte) (b ? 1 : 0));
         return this;
     }
 
-    public Fnv hashShort(final short s) {
+    public OneAtATime hashShort(final short s) {
         hashByte((byte) ((s >>> 8) & 0xFF));
         hashByte((byte) (s & 0xFF));
         return this;
     }
-
-    public Fnv hashInt(final int i) {
+    
+    public OneAtATime hashInt(final int i) {
         hashByte((byte) ((i >>> 24) & 0xFF));
         hashByte((byte) ((i >>> 16) & 0xFF));
         hashByte((byte) ((i >>> 8) & 0xFF));
@@ -34,23 +34,23 @@ final public class Fnv {
         return this;
     }
 
-    public Fnv hashFloat(final float f) {
+    public OneAtATime hashFloat(final float f) {
         hashInt(Float.floatToIntBits(f));
         return this;
     }
 
-    public Fnv hashLong(final long l) {
+    public OneAtATime hashLong(final long l) {
         hashInt((int) ((l >>> 32) & 0xFFFF_FFFF));
         hashInt((int) (l & 0xFFFF_FFFF));
         return this;
     }
 
-    public Fnv hashDouble(final double d) {
+    public OneAtATime hashDouble(final double d) {
         hashLong(Double.doubleToLongBits(d));
         return this;
     }
 
-    public Fnv hashObject(final Object o) {
+    public OneAtATime hashObject(final Object o) {
         if(o == null) {
             return this;
         }
@@ -89,33 +89,37 @@ final public class Fnv {
     }
 
     public int finish() {
-        return _tl.get().pop();
+        int hash = _tl.get().pop();
+        hash += (hash << 3);
+        hash ^= (hash >>> 11);
+        hash += (hash << 15);
+        return hash;
     }
 
-    public static Fnv start() {
+    public static OneAtATime start() {
         return _tl.get().push();
     }
 
-    private static final ThreadLocal<FnvStack> _tl = ThreadLocal.withInitial(FnvStack::new);
+    private static final ThreadLocal<OneAtATimeStack> _tl = ThreadLocal.withInitial(OneAtATimeStack::new);
     
-    private static class FnvStack {
-        final ArrayList<Fnv> fnvs = new ArrayList<>();
+    private static class OneAtATimeStack {
+        final ArrayList<OneAtATime> objects = new ArrayList<>();
         int index = -1;
 
-        Fnv push() {
+        OneAtATime push() {
             ++index;
-            if(index > (fnvs.size() - 1)) {
-                fnvs.add(new Fnv());
+            if(index > (objects.size() - 1)) {
+                objects.add(new OneAtATime());
             }
 
-            Fnv fnv = fnvs.get(index);
-            fnv.hash = (index == 0) ? OFFSET : fnvs.get(index-1).hash;
+            OneAtATime object = objects.get(index);
+            object.hash = index == 0 ? INIT : objects.get(index-1).hash;
             
-            return fnv;
+            return object;
         }
 
         int pop() {
-            final int ret = fnvs.get(index).hash;
+            final int ret = objects.get(index).hash;
             --index;
             return ret;
         }

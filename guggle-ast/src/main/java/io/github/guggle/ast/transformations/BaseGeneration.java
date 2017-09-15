@@ -128,7 +128,8 @@ public class BaseGeneration extends AbstractASTTransformation {
         final FieldNode[] ret = new FieldNode[types.length];
         for(int i = 0; i < types.length; ++i) {
             final int modifiers = immutable ? (ACC_PRIVATE | ACC_FINAL) : ACC_PRIVATE;
-            ret[i] = new FieldNode(F_PREFIX + i, modifiers, copy(types[i]), owner, EmptyExpression.INSTANCE);
+            //MUY IMPORTANTE! Uninitialized fields should get null not an empty expression
+            ret[i] = new FieldNode(F_PREFIX + i, modifiers, copy(types[i]), owner, null);
             owner.addField(ret[i]);
         }
 
