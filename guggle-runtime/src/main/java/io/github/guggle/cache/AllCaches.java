@@ -91,6 +91,17 @@ public class AllCaches implements CacheRegistry {
         }
     }
 
+    public TimeUnits getExpirationInterval() {
+        return expirationInterval;
+    }
+
+    public void setExpirationInterval(final TimeUnits val) {
+        this.expirationInterval = val;
+        scheduler.shutdownNow();
+        scheduler = Executors.newSingleThreadScheduledExecutor();
+        scheduleNextExpiration();
+    }
+
     private void scheduleNextExpiration() {
         scheduler.schedule(this::expireNeeded, expirationInterval.getInterval(), expirationInterval.getTimeUnit());
     }
@@ -172,7 +183,10 @@ public class AllCaches implements CacheRegistry {
         public void dirty(final K key) {
             final Expiration val = (Expiration) backing.get(key);
             if(val != null) {
-                val.dirty();
+                backing.remove(key);
+                if(lifetime.getRefresh() == Refresh.EAGER) {
+                    generate(key);
+                }
             }
         }
 

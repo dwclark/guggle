@@ -172,7 +172,7 @@ class CacheGeneration extends BaseGeneration {
             else if(returnType == ClassHelper.int_TYPE) _valueMethod = "value";
             else if(returnType == ClassHelper.long_TYPE) _valueMethod = "value";
             else if(returnType == ClassHelper.float_TYPE) _valueMethod = "floatValue";
-            else if(returnType == ClassHelper.double_TYPE) _valueMethod = "doubleValue";
+            else if(returnType == ClassHelper.double_TYPE) _valueMethod = "value";
             else {
                 _valueMethod = "value";
                 _valueNeedsCast = true;
