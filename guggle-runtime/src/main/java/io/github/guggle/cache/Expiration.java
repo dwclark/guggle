@@ -1,128 +1,118 @@
 package io.github.guggle.cache;
 
 import java.time.Instant;
-import java.time.temporal.ChronoUnit;
-import io.github.guggle.api.*;
-import static io.github.guggle.api.Expires.*;
 import io.github.guggle.utils.TimeUnits;
+import io.github.guggle.api.Expires;
 
-public class Expiration {
-    private final static int DIRTY = Integer.MIN_VALUE;
+public interface Expiration {
+    void accessed();
+    int getAccessed();
+    Expired expired(Expires expires, TimeUnits timeUnits, Instant asOf);
+
+        public static Expiration convert(final Expires expires, final Expiration current) {
+        if(current instanceof IntHolder) {
+            return forInt(expires, current);
+        }
+        else if(current instanceof LongHolder) {
+            return forLong(expires, current);
+        }
+        else if(current instanceof DoubleHolder) {
+            return forDouble(expires, current);
+        }
+        else {
+            return forObject(expires, current);
+        }
+    }
     
-    private volatile int lastAccessed;
-    private final int created;
-
-    public Expiration(final Instant start) {
-        this.created = diff(start);
-        this.lastAccessed = created;
-    }
-    
-    public void updateAccessed(final Instant start) {
-        if(lastAccessed != DIRTY) {
-            this.lastAccessed = diff(start);
+    public static Expiration forInt(final Expires expires, final int value) {
+        switch(expires) {
+        case NEVER: return new NeverExpires.ForInt(value);
+        case FIXED: return new FixedExpiration.ForInt(value);
+        case ACCESSED: return new AccessedExpiration.ForInt(value);
+        default:
+            throw new IllegalArgumentException("Can't handle expiration: " + expires);
         }
     }
 
-    // public void dirty() {
-    //     lastAccessed = DIRTY;
-    // }
-
-    public boolean expired(final Expires expires, final TimeUnits timeUnits,
-                           final Instant asOf, final Instant start) {
-        if(lastAccessed == DIRTY) {
-            return true;
-        }
-
-        if(expires == NEVER) {
-            return false;
-        }
-
-        final int tmp = (expires == FIXED) ? created : lastAccessed;
-        final Instant expiresAt = Instant.ofEpochMilli(expand(tmp) + start.toEpochMilli()).plus(timeUnits.getInterval(), timeUnits.getChronoUnit());
-        return expiresAt.isBefore(asOf);
-    }
-
-    private int diff(final Instant start) {
-        return truncate(Instant.now().toEpochMilli() - start.toEpochMilli());
-    }
-
-    private int truncate(final long val) {
-        return (int) (val / 1_000L);
-    }
-
-    private long expand(final int val) {
-        return ((long) val) * 1_000L;
-    }
-
-    public static long start() {
-        return Instant.now().toEpochMilli();
-    }
-
-    public static class IntHolder extends Expiration {
-        private final int val;
-
-        public IntHolder(final Instant start, final int val) {
-            super(start);
-            this.val = val;
-        }
-
-        public int value() {
-            return val;
+    public static Expiration forInt(final Expires expires, final Expiration current) {
+        final int accessed = current.getAccessed();
+        final int value = ((IntHolder) current).value();
+        
+        switch(expires) {
+        case NEVER: return new NeverExpires.ForInt(value);
+        case FIXED: return (accessed >= 0) ? new FixedExpiration.ForInt(value, accessed) : new FixedExpiration.ForInt(value);
+        case ACCESSED: return (accessed >= 0) ? new AccessedExpiration.ForInt(value, accessed) : new AccessedExpiration.ForInt(value);
+        default:
+            throw new IllegalArgumentException("Can't handle expiration: " + expires);
         }
     }
 
-    public static class LongHolder extends Expiration {
-        private final long val;
-
-        public LongHolder(final Instant start, final long val) {
-            super(start);
-            this.val = val;
-        }
-
-        public long value() {
-            return val;
+    public static Expiration forLong(final Expires expires, final long value) {
+        switch(expires) {
+        case NEVER: return new NeverExpires.ForLong(value);
+        case FIXED: return new FixedExpiration.ForLong(value);
+        case ACCESSED: new AccessedExpiration.ForLong(value);
+        default:
+            throw new IllegalArgumentException("Can't handle expiration: " + expires);
         }
     }
 
-    public static class DoubleHolder extends Expiration {
-        private final double val;
-
-        public DoubleHolder(final Instant start, final double val) {
-            super(start);
-            this.val = val;
-        }
-
-        public double value() {
-            return val;
-        }
-    }
-
-    public static class ObjectHolder extends Expiration {
-        private final Object val;
-
-        public ObjectHolder(final Instant start, final Object val) {
-            super(start);
-            this.val = val;
-        }
-
-        public Object value() {
-            return val;
+    public static Expiration forLong(final Expires expires, final Expiration current) {
+        final int accessed = current.getAccessed();
+        final long value = ((LongHolder) current).value();
+        
+        switch(expires) {
+        case NEVER: return new NeverExpires.ForLong(value);
+        case FIXED: return (accessed >= 0) ? new FixedExpiration.ForLong(value, accessed) : new FixedExpiration.ForLong(value);
+        case ACCESSED: return (accessed >= 0) ? new AccessedExpiration.ForLong(value, accessed) : new AccessedExpiration.ForLong(value);
+        default:
+            throw new IllegalArgumentException("Can't handle expiration: " + expires);
         }
     }
 
-    public static IntHolder intHolder(final Instant start, final int val) {
-        return new IntHolder(start, val);
+    public static Expiration forDouble(final Expires expires, final double value) {
+        switch(expires) {
+        case NEVER: return new NeverExpires.ForDouble(value);
+        case FIXED: return new FixedExpiration.ForDouble(value);
+        case ACCESSED: return new AccessedExpiration.ForDouble(value);
+        default:
+            throw new IllegalArgumentException("Can't handle expiration: " + expires);
+        }
     }
 
-    public static LongHolder longHolder(final Instant start, final long val) {
-        return new LongHolder(start, val);
+    public static Expiration forDouble(final Expires expires, final Expiration current) {
+        final int accessed = current.getAccessed();
+        final double value = ((DoubleHolder) current).value();
+        
+        switch(expires) {
+        case NEVER: return new NeverExpires.ForDouble(value);
+        case FIXED: return (accessed >= 0) ? new FixedExpiration.ForDouble(value, accessed) : new FixedExpiration.ForDouble(value);
+        case ACCESSED: return (accessed >= 0) ? new AccessedExpiration.ForDouble(value, accessed) : new AccessedExpiration.ForDouble(value);
+        default:
+            throw new IllegalArgumentException("Can't handle expiration: " + expires);
+        }
     }
 
-    public static DoubleHolder doubleHolder(final Instant start, final double val) {
-        return new DoubleHolder(start, val);
+    public static Expiration forObject(final Expires expires, final Object value) {
+        switch(expires) {
+        case NEVER: return new NeverExpires.ForObject(value);
+        case FIXED: return new FixedExpiration.ForObject(value);
+        case ACCESSED: return new AccessedExpiration.ForObject(value);
+        default:
+            throw new IllegalArgumentException("Can't handle expiration: " + expires);
+        }
     }
 
-    public static ObjectHolder objectHolder(final Instant start, final Object val) {
-        return new ObjectHolder(start, val);
+    public static Expiration forObject(final Expires expires, final Expiration current) {
+        final int accessed = current.getAccessed();
+        final Object value = ((ObjectHolder) current).value();
+        
+        switch(expires) {
+        case NEVER: return new NeverExpires.ForObject(value);
+        case FIXED: return (accessed >= 0) ? new FixedExpiration.ForObject(value, accessed) : new FixedExpiration.ForObject(value);
+        case ACCESSED: return (accessed >= 0) ? new AccessedExpiration.ForObject(value, accessed) : new AccessedExpiration.ForObject(value);
+        default:
+            throw new IllegalArgumentException("Can't handle expiration: " + expires);
+        }
     }
 }

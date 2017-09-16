@@ -19,12 +19,24 @@ import java.util.stream.*;
 
 public class AllCaches implements CacheRegistry {
 
+    public static final Instant EPOCH = Instant.now();
+    public static final long EPOCH_MILLIS = EPOCH.toEpochMilli();
+    
+    public static int sinceEpoch() {
+        return (int) ((Instant.now().toEpochMilli() - EPOCH_MILLIS) / 1_000L);
+    }
+
+    public static Expired expired(final int since, final TimeUnits timeUnits, final Instant asOf) {
+        final Instant toTest = Instant.ofEpochMilli(EPOCH_MILLIS + (1_000L * (long) since) + timeUnits.toMillis());
+        return toTest.isBefore(asOf) ? Expired.TRUE : Expired.FALSE;
+    }
+    
     private static final AllCaches instance = new AllCaches();
+
     public static CacheRegistry instance() {
         return instance;
     }
-
-    private final Instant start = Instant.now();
+    
     private final Map<MethodId, View<?,?>> _all = new HashMap<>();
     private final Map<MethodId, View<?,?>> _configs = new HashMap<>();
     private final ConcurrentMap<Object,CompletableFuture<Expiration>> inFlight = new ConcurrentHashMap<>(64, 0.65f, 4);
@@ -119,17 +131,18 @@ public class AllCaches implements CacheRegistry {
                         });
 
                     for(ConcurrentMap<Object,Object> backing : listBacking) {
-                        Set<Object> toRemove = new HashSet<>();
                         backing.entrySet().stream().forEach((e) -> {
                                 final Object key = e.getKey();
                                 Expiration exp = (Expiration) e.getValue();
                                 View<?,?> view = mapClassViews.get(key.getClass());
-                                if(exp.expired(view.lifetime.getExpires(), view.lifetime.getUnits(), now, start)) {
+                                Expired expired = exp.expired(view.lifetime.getExpires(), view.lifetime.getUnits(), now);
+                                
+                                if(expired == Expired.TRUE) {
                                     if(view.lifetime.getRefresh() == Refresh.ON_DEMAND ||
                                        view.lifetime.getRefresh() == Refresh.NONE) {
-                                        toRemove.add(key);
+                                        backing.remove(key);
                                     }
-
+                                    
                                     if(view.lifetime.getRefresh() == Refresh.EAGER) {
                                         workerPool.submit(() -> {
                                                 final Object myKey = key;
@@ -137,11 +150,9 @@ public class AllCaches implements CacheRegistry {
                                             });
                                     }
                                 }
-                            });
-
-                        for(Object key : toRemove) {
-                            backing.remove(key);
-                        }
+                                else if(expired == Expired.UNKNOWN) {
+                                    backing.put(key, Expiration.convert(view.lifetime.getExpires(), exp));
+                                } });
                     }
                 }
                 finally {
@@ -170,7 +181,7 @@ public class AllCaches implements CacheRegistry {
         }
 
         public void clear() {
-            Set<K> toRemove = keys().collect(Collectors.toSet());
+            final Set<K> toRemove = keys().collect(Collectors.toSet());
             for(K k : toRemove) {
                 backing.remove(k);
             }
@@ -216,8 +227,8 @@ public class AllCaches implements CacheRegistry {
         }
 
         protected Expiration doInFlight(final K permanent,
-                                            final CompletableFuture<Expiration> future,
-                                            final Supplier<Expiration> supplier) {
+                                        final CompletableFuture<Expiration> future,
+                                        final Supplier<Expiration> supplier) {
             try {
                 Expiration holder = supplier.get();
                 future.complete(holder);
@@ -230,8 +241,8 @@ public class AllCaches implements CacheRegistry {
         }
     }
 
-    private class IntView<K extends Permanent<K>> extends View<K,Expiration.IntHolder> implements IntCacheView<K> {
-        final ToIntFunction<K> function;
+    private class IntView<K extends Permanent<K>> extends View<K,Expiration> implements IntCacheView<K> {
+        private final ToIntFunction<K> function;
         
         public IntView(final Class<K> keyType, final ConcurrentMap<Object,Object> backing,
                        final Lifetime lifetime, final ToIntFunction<K> function) {
@@ -240,54 +251,49 @@ public class AllCaches implements CacheRegistry {
         }
 
         public int value(final K key) {
-            final Expiration.IntHolder holder = (Expiration.IntHolder) backing.get(key);
-            if(holder == null) {
-                return generate(key).value();
+            final IntHolder holder = (IntHolder) backing.get(key);
+            if(holder != null) {
+                return holder.value();
             }
             else {
-                return holder.value();
+                return ((IntHolder) generate(key)).value();
             }
         }
         
         public int get(final K key) {
-            Expiration.IntHolder holder = (Expiration.IntHolder) backing.get(key);
-            if(holder == null) {
-                return 0;
-            }
-            else {
-                return holder.value();
-            }
+            final IntHolder holder = (IntHolder) backing.get(key);
+            return (holder == null) ? 0 : holder.value();
         }
         
         public void put(final K key, final int val) {
-            backing.put(key.permanent(), Expiration.intHolder(start, val));
+            backing.put(key.permanent(), Expiration.forInt(lifetime.getExpires(), val));
         }
         
         public IntStream values() {
             return backing.entrySet().stream()
                 .filter(keyType::isInstance)
-                .mapToInt((e) -> ((Expiration.IntHolder) e.getValue()).value());
+                .mapToInt((e) -> ((IntHolder) e.getValue()).value());
         }
 
         @Override
-        protected Expiration.IntHolder untypedGenerate(final Object o) {
+        protected Expiration untypedGenerate(final Object o) {
             return generate(keyType.cast(o));
         }
 
         @Override
-        protected Expiration.IntHolder generate(final K key) {
+        protected Expiration generate(final K key) {
             final K permanent = key.permanent();
             final CompletableFuture<Expiration> attempt = new CompletableFuture<>();
             final CompletableFuture<Expiration> future = inFlight.computeIfAbsent(permanent, (tmp) -> attempt);
 
-            return (Expiration.IntHolder) ((future == attempt) ?
-                                           doInFlight(permanent, future, () -> Expiration.intHolder(start, function.applyAsInt(key))) :
-                                           extract(future));
+            return (Expiration) ((future == attempt) ?
+                                 doInFlight(permanent, future, () -> Expiration.forInt(lifetime.getExpires(), function.applyAsInt(key))) :
+                                 extract(future));
         }
     }
 
-    private class LongView<K extends Permanent<K>> extends View<K,Expiration.LongHolder> implements LongCacheView<K> {
-        final ToLongFunction<K> function;
+    private class LongView<K extends Permanent<K>> extends View<K,Expiration> implements LongCacheView<K> {
+        private final ToLongFunction<K> function;
         
         public LongView(final Class<K> keyType, final ConcurrentMap<Object,Object> backing,
                         final Lifetime lifetime, final ToLongFunction<K> function) {
@@ -296,54 +302,49 @@ public class AllCaches implements CacheRegistry {
         }
 
         public long value(final K key) {
-            final Expiration.LongHolder holder = (Expiration.LongHolder) backing.get(key);
-            if(holder == null) {
-                return generate(key).value();
+            final LongHolder holder = (LongHolder) backing.get(key);
+            if(holder != null) {
+                return holder.value();
             }
             else {
-                return holder.value();
+                return ((LongHolder) generate(key)).value();
             }
         }
         
         public long get(final K key) {
-            Expiration.LongHolder holder = (Expiration.LongHolder) backing.get(key);
-            if(holder == null) {
-                return 0L;
-            }
-            else {
-                return holder.value();
-            }
+            final LongHolder holder = (LongHolder) backing.get(key);
+            return (holder == null) ? 0L : holder.value();
         }
         
         public void put(final K key, final long val) {
-            backing.put(key.permanent(), Expiration.longHolder(start, val));
+            backing.put(key.permanent(), Expiration.forLong(lifetime.getExpires(), val));
         }
         
         public LongStream values() {
             return backing.entrySet().stream()
                 .filter(keyType::isInstance)
-                .mapToLong((e) -> ((Expiration.LongHolder) e.getValue()).value());
+                .mapToLong((e) -> ((LongHolder) e.getValue()).value());
         }
 
         @Override
-        protected Expiration.LongHolder untypedGenerate(final Object o) {
+        protected Expiration untypedGenerate(final Object o) {
             return generate(keyType.cast(o));
         }
 
         @Override
-        protected Expiration.LongHolder generate(final K key) {
+        protected Expiration generate(final K key) {
             final K permanent = key.permanent();
             final CompletableFuture<Expiration> attempt = new CompletableFuture<>();
             final CompletableFuture<Expiration> future = inFlight.computeIfAbsent(permanent, (tmp) -> attempt);
 
-            return (Expiration.LongHolder) ((future == attempt) ?
-                                            doInFlight(permanent, future, () -> Expiration.longHolder(start, function.applyAsLong(key))) :
-                                            extract(future));
+            return (Expiration) ((future == attempt) ?
+                                 doInFlight(permanent, future, () -> Expiration.forLong(lifetime.getExpires(), function.applyAsLong(key))) :
+                                 extract(future));
         }
     }
     
-    private class DoubleView<K extends Permanent<K>> extends View<K,Expiration.DoubleHolder> implements DoubleCacheView<K> {
-        final ToDoubleFunction<K> function;
+    private class DoubleView<K extends Permanent<K>> extends View<K,Expiration> implements DoubleCacheView<K> {
+        private final ToDoubleFunction<K> function;
         
         public DoubleView(final Class<K> keyType, final ConcurrentMap<Object,Object> backing,
                           final Lifetime lifetime, final ToDoubleFunction<K> function) {
@@ -352,53 +353,48 @@ public class AllCaches implements CacheRegistry {
         }
 
         public double value(final K key) {
-            final Expiration.DoubleHolder holder = (Expiration.DoubleHolder) backing.get(key);
-            if(holder == null) {
-                return generate(key).value();
+            final DoubleHolder holder = (DoubleHolder) backing.get(key);
+            if(holder != null) {
+                return holder.value();
             }
             else {
-                return holder.value();
+                return ((DoubleHolder) generate(key)).value();
             }
         }
         
         public double get(final K key) {
-            Expiration.LongHolder holder = (Expiration.LongHolder) backing.get(key);
-            if(holder == null) {
-                return 0L;
-            }
-            else {
-                return holder.value();
-            }
+            final DoubleHolder holder = (DoubleHolder) backing.get(key);
+            return (holder == null) ? 0.0d : holder.value();
         }
         
         public void put(final K key, final double val) {
-            backing.put(key.permanent(), Expiration.doubleHolder(start, val));
+            backing.put(key.permanent(), Expiration.forDouble(lifetime.getExpires(), val));
         }
         
         public DoubleStream values() {
             return backing.entrySet().stream()
                 .filter(keyType::isInstance)
-                .mapToDouble((e) -> ((Expiration.DoubleHolder) e.getValue()).value());
+                .mapToDouble((e) -> ((DoubleHolder) e.getValue()).value());
         }
 
         @Override
-        protected Expiration.DoubleHolder untypedGenerate(final Object o) {
+        protected Expiration untypedGenerate(final Object o) {
             return generate(keyType.cast(o));
         }
 
         @Override
-        protected Expiration.DoubleHolder generate(final K key) {
+        protected Expiration generate(final K key) {
             final K permanent = key.permanent();
             final CompletableFuture<Expiration> attempt = new CompletableFuture<>();
             final CompletableFuture<Expiration> future = inFlight.computeIfAbsent(permanent, (tmp) -> attempt);
-
-            return (Expiration.DoubleHolder) ((future == attempt) ?
-                                              doInFlight(permanent, future, () -> Expiration.doubleHolder(start, function.applyAsDouble(key))) :
-                                              extract(future));
+            
+            return (Expiration) ((future == attempt) ?
+                                 doInFlight(permanent, future, () -> Expiration.forDouble(lifetime.getExpires(), function.applyAsDouble(key))) :
+                                 extract(future));
         }
     }
 
-    private class ObjectView<K extends Permanent<K>,V> extends View<K,Expiration.ObjectHolder> implements ObjectCacheView<K,V> {
+    private class ObjectView<K extends Permanent<K>,V> extends View<K,Expiration> implements ObjectCacheView<K,V> {
         private final Function<K,V> function;
         private final Class<V> valueType;
         
@@ -411,39 +407,44 @@ public class AllCaches implements CacheRegistry {
         }
 
         public V value(final K key) {
-            final Expiration.ObjectHolder holder = (Expiration.ObjectHolder) backing.get(key);
-            return valueType.cast((holder != null) ? holder.value() : generate(key).value());
+            final ObjectHolder holder = (ObjectHolder) backing.get(key);
+            if(holder != null) {
+                return valueType.cast(holder.value());
+            }
+            else {
+                return valueType.cast(((ObjectHolder) generate(key)).value());
+            }
         }
         
         public V get(final K key) {
-            final Expiration.ObjectHolder holder = (Expiration.ObjectHolder) backing.get(key);
+            final ObjectHolder holder = (ObjectHolder) backing.get(key);
             return valueType.cast((holder == null) ? null : holder.value());
         }
         
         public void put(final K key, final V val) {
-            backing.put(key.permanent(), Expiration.objectHolder(start, val));
+            backing.put(key.permanent(), Expiration.forObject(lifetime.getExpires(), val));
         }
         
         public Stream<V> values() {
             return backing.entrySet().stream()
                 .filter(keyType::isInstance)
-                .map((e) -> valueType.cast(((Expiration.ObjectHolder) e.getValue()).value()));
+                .map((e) -> valueType.cast(((ObjectHolder) e.getValue()).value()));
         }
 
         @Override
-        protected Expiration.ObjectHolder untypedGenerate(final Object o) {
+        protected Expiration untypedGenerate(final Object o) {
             return generate(keyType.cast(o));
         }
 
         @Override
-        protected Expiration.ObjectHolder generate(final K key) {
+        protected Expiration generate(final K key) {
             final K permanent = key.permanent();
             final CompletableFuture<Expiration> attempt = new CompletableFuture<>();
             final CompletableFuture<Expiration> future = inFlight.computeIfAbsent(permanent, (tmp) -> attempt);
 
-            return (Expiration.ObjectHolder) ((future == attempt) ?
-                                              doInFlight(permanent, future, () -> Expiration.objectHolder(start, function.apply(key))) :
-                                              extract(future));
+            return (Expiration) ((future == attempt) ?
+                                 doInFlight(permanent, future, () -> Expiration.forObject(lifetime.getExpires(), function.apply(key))) :
+                                 extract(future));
         }
     }
 

@@ -29,6 +29,14 @@ public class TimeUnits {
     public ChronoUnit getChronoUnit() {
         return toChronoUnit(units);
     }
+
+    public long toSeconds() {
+        return units.toSeconds(interval);
+    }
+
+    public long toMillis() {
+        return units.toMillis(interval);
+    }
     
     public static ChronoUnit toChronoUnit(final TimeUnit units) {
         switch(units) {
