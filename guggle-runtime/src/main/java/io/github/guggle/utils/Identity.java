@@ -1,32 +1,22 @@
 package io.github.guggle.utils;
 
-public class Identity<T> {
+public class Identity {
 
-    private final T val;
+    private final Object ref;
     private final int fnv;
-    private final int oneAtATime;
     
-    public Identity(final T val) {
-        this.val = val;
-        this.fnv = Fnv.start().hashObject(val).finish();
-        this.oneAtATime = OneAtATime.start().hashObject(val).finish();
+    public Identity(final Object ref) {
+        this.ref = ref;
+        this.fnv = Fnv.start().hashObject(ref).finish();
     }
 
     @Override
     public boolean equals(final Object rhs) {
-        return val == rhs;
+        return ref == rhs;
     }
 
     @Override
     public int hashCode() {
         return fnv;
-    }
-
-    public int fnvHash() {
-        return fnv;
-    }
-
-    public int oneAtATimeHash() {
-        return oneAtATime;
     }
 }
