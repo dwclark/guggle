@@ -2,6 +2,7 @@ package io.github.guggle.cache;
 
 import io.github.guggle.api.*;
 import io.github.guggle.utils.TimeUnits;
+import io.github.guggle.utils.NamedThread;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -44,7 +45,7 @@ public class AllCaches implements CacheRegistry {
     
     private volatile ConcurrentMap<Object,Object> defaultBacking = new ConcurrentHashMap<>(4_096, 0.65f, 4);
     private volatile ExecutorService workerPool;
-    private volatile ScheduledExecutorService scheduler = Executors.newSingleThreadScheduledExecutor();
+    private volatile ScheduledExecutorService scheduler = Executors.newSingleThreadScheduledExecutor(new NamedThread("Cache Scheduler", true));
     private volatile TimeUnits expirationInterval = TimeUnits.minutes(1L);
     
     private AllCaches() {
@@ -52,6 +53,7 @@ public class AllCaches implements CacheRegistry {
         ThreadPoolExecutor tpe = new ThreadPoolExecutor(Math.max(cores / 4, 1), cores,
                                                         30L, TimeUnit.SECONDS,
                                                         new ArrayBlockingQueue<>(cores * 4),
+                                                        new NamedThread("Cache Worker", true),
                                                         new ThreadPoolExecutor.CallerRunsPolicy());
         tpe.allowCoreThreadTimeOut(true);
         workerPool = tpe;

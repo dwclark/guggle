@@ -2,7 +2,6 @@ package io.github.guggle.utils;
 
 import java.util.PriorityQueue;
 import java.util.IdentityHashMap;
-import java.util.AbstractQueue;
 import java.util.Iterator;
 import java.util.NoSuchElementException;
 import java.util.function.Supplier;
@@ -10,7 +9,7 @@ import java.util.function.Consumer;
 import java.time.Instant;
 import java.util.concurrent.ExecutorService;
 
-public class ResourceQueue<T> extends AbstractQueue<T> {
+public class ResourceQueue<T> extends ExemplarQueue<T> {
     
     private static class Node<NT> implements Comparable<Node<NT>> {
         private final Instant created;
@@ -30,6 +29,7 @@ public class ResourceQueue<T> extends AbstractQueue<T> {
         }
     }
 
+    private final T exemplar;
     private final PriorityQueue<Node<T>> ready;
     private final IdentityHashMap<Object,Node<T>> all;
     private final int max;
@@ -73,6 +73,14 @@ public class ResourceQueue<T> extends AbstractQueue<T> {
         this.supplier = supplier;
         this.executor = executor;
         this.whenSupplied = whenSupplied;
+
+        final T first = supplier.get();
+        this.exemplar = first;
+        placeNew(first);
+    }
+
+    public T exemplar() {
+        return exemplar;
     }
 
     public int size() {
@@ -120,16 +128,20 @@ public class ResourceQueue<T> extends AbstractQueue<T> {
         }
     }
 
+    private void placeNew(final T val) {
+        final Node<T> node = new Node<>(val);
+        all.put(val, node);
+        ready.offer(node);
+    }
+
     public boolean offer(final T val) {
         if(ready.size() < max) {
             return false;
         }
         else {
             Node<T> node = all.get(val);
-            if(node == null) {
-                node = new Node<>(val);
-                all.put(val, node);
-                ready.offer(node);
+            if(!all.containsKey(val)) {
+                placeNew(val);
             }
             else {
                 ready.offer(node);

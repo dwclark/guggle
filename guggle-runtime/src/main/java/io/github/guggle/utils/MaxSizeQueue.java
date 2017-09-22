@@ -1,27 +1,35 @@
 package io.github.guggle.utils;
 
-import java.util.AbstractQueue;
 import java.util.Iterator;
 import java.util.NoSuchElementException;
 import java.util.function.Supplier;
 
-public class MaxSizeQueue<T> extends AbstractQueue<T> {
+public class MaxSizeQueue<T> extends ExemplarQueue<T> {
 
+    private final T exemplar;
     private Object[] contents;
     private int pollAt;
     private int offerAt;
     private int max;
 
-    public MaxSizeQueue(final int max) {
+    public MaxSizeQueue(final int max, final T val) {
         this.max = max;
+        this.exemplar = val;
         this.contents = new Object[max];
     }
 
     public MaxSizeQueue(final int max, final Supplier<T> supplier) {
-        this(max);
+        this.max = max;
+        this.contents = new Object[max];
         for(int i = 0; i < max; ++i) {
             _offer(supplier.get());
         }
+
+        this.exemplar = (T) contents[0];
+    }
+
+    public T exemplar() {
+        return exemplar;
     }
     
     public int size() {

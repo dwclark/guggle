@@ -1,12 +1,21 @@
 package io.github.guggle.utils;
 
-import java.util.AbstractQueue;
 import java.util.Iterator;
 import java.util.NoSuchElementException;
 
-public class SingletonQueue<T> extends AbstractQueue<T> {
+public class SingletonQueue<T> extends ExemplarQueue<T> {
 
     private T contents;
+    private final T exemplar;
+
+    public SingletonQueue(final T val) {
+        this.contents = val;
+        this.exemplar = val;
+    }
+
+    public T exemplar() {
+        return exemplar;
+    }
 
     public int size() {
         return contents == null ? 0 : 1;
