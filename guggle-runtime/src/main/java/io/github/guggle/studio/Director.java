@@ -6,16 +6,17 @@ import java.util.function.Consumer;
 import java.util.function.Supplier;
 import java.util.concurrent.atomic.AtomicInteger;
 import io.github.guggle.api.StudioContract;
-import io.github.guggle.api.Message;
 import io.github.guggle.api.StudioId;
+import io.github.guggle.studio.StudioThreads.StudioThread;
 
 abstract class Director {
+    
     private volatile int maxWaitingMessages = -1;
     private volatile ExecutorService executor = null;
-    private volatile Consumer<Message> messageFailure;
+    private volatile Consumer<Object> messageFailure;
     
     private final AtomicInteger waitingMessages = new AtomicInteger();
-    private final ConcurrentLinkedQueue<Message> queue = new ConcurrentLinkedQueue<>();
+    private final ConcurrentLinkedQueue<Consumer<Object>> queue = new ConcurrentLinkedQueue<>();
     private final TheStudio theStudio;
     private final StudioContract contract;
 
@@ -24,8 +25,27 @@ abstract class Director {
         this.contract = contract;
     }
 
-    public void setExecutor(final ExecutorService val) {
+    public Consumer<Object> getMessageFailure() {
+        return messageFailure != null ? messageFailure : theStudio.getDefaultMessageFailure();
+    }
+
+    public Director setMessageFailure(final Consumer<Object> val) {
+        this.messageFailure = val;
+        return this;
+    }
+
+    public int getMaxWaitingMessages() {
+        return maxWaitingMessages;
+    }
+
+    public Director setMaxWaitingMessages(final int val) {
+        this.maxWaitingMessages = val;
+        return this;
+    }
+
+    public Director setExecutor(final ExecutorService val) {
         this.executor = val;
+        return this;
     }
 
     protected ExecutorService getExecutor() {
@@ -33,35 +53,47 @@ abstract class Director {
             return executor;
         }
         else if(contract == StudioContract.IO) {
-            return theStudio.defaultIoExecutor;
+            return theStudio.getDefaultIoExecutor();
         }
         else {
-            return theStudio.defaultComputeExecutor;
+            return theStudio.getDefaultComputeExecutor();
         }
     }
 
-    private void submitMessage(final Message message) {
-        getExecutor().submit(message);
-    }
-    
-    public void messageReady(final Message message) {
-        if(canAddMessage()) {
-            queue.offer(message);
-            final StudioId resource = checkoutResource();
-            final Message foundMessage = queue.poll();
-            if(foundMessage != null) {
-                foundMessage.resource(resource);
-                submitMessage(foundMessage);
+    private void sendAll() {
+        while(true) {
+            final Consumer<Object> found = queue.peek();
+            if(found == null) {
+                return;
+            }
+            
+            final StudioId actor = checkoutResource();
+            if(actor == null) {
+                return;
+            }
+            
+            final Consumer<Object> polled = queue.poll();
+            if(found == polled) {
+                getExecutor().submit(() -> {
+                        found.accept(actor);
+                        resourceReady(actor);
+                    });
+                    
+                waitingMessages.decrementAndGet();
             }
             else {
-                putBackResource(resource);
+                putBackResource(actor);
             }
         }
-        else if(messageFailure != null) {
-            messageFailure.accept(message);
+    }
+    
+    public void messageReady(final Consumer<Object> message) {
+        if(!canAddMessage()) {
+            getMessageFailure().accept(message);
         }
         else {
-            theStudio.defaultMessageFailure.accept(message);
+            queue.offer(message);
+            sendAll();
         }
     }
 
@@ -87,20 +119,8 @@ abstract class Director {
     }
     
     public void resourceReady(final StudioId studioId) {
-        if(Thread.currentThread() instanceof StudioThread) {
-            final Message message = queue.poll();
-            if(message != null) {
-                message.resource(studioId);
-                submitMessage(message);
-                waitingMessages.decrementAndGet();
-            }
-            else {
-                putBackResource(studioId);
-            }
-        }
-        else {
-            putBackResource(studioId);
-        }
+        putBackResource(studioId);
+        sendAll();
     }
 
     public int waitingSize() {

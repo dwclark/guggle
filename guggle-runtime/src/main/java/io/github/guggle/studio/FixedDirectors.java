@@ -21,10 +21,12 @@ class FixedDirectors extends Director {
 
     protected StudioId checkoutResource() {
         int index = 0;
-        while(index != bitSet.nextClearBit(index)) {
+        while((index = bitSet.nextClearBit(index)) != bitSet.getMax()) {
             if(bitSet.setIfUnset(index)) {
                 return refs.get(index);
             }
+
+            index = 0;
         }
 
         return null;

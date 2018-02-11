@@ -1,5 +1,6 @@
 package io.github.guggle.studio;
 
+import io.github.guggle.api.StudioContract;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.ForkJoinPool.ForkJoinWorkerThreadFactory;
 import java.util.concurrent.ThreadFactory;

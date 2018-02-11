@@ -1,18 +1,18 @@
 package io.github.guggle.studio;
 
-import io.github.guggle.api.Message;
+import io.github.guggle.utils.*;
+import io.github.guggle.api.MaximumMessagesException;
+import io.github.guggle.api.NotFoundInStudioException;
+import io.github.guggle.api.Permanent;
 import io.github.guggle.api.StudioContract;
 import io.github.guggle.api.StudioId;
-import io.github.guggle.utils.ExemplarQueue;
-import io.github.guggle.utils.MaxSizeQueue;
-import io.github.guggle.utils.NamedThread;
-import io.github.guggle.utils.ResourceQueue;
-import io.github.guggle.utils.SingletonQueue;
+import io.github.guggle.api.Studio;
 import java.util.ArrayDeque;
 import java.util.NavigableSet;
 import java.util.Queue;
 import java.util.TreeSet;
 import java.util.concurrent.BlockingQueue;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -20,34 +20,148 @@ import java.util.concurrent.ForkJoinPool;
 import java.util.concurrent.PriorityBlockingQueue;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
+import java.util.function.ToIntBiFunction;
+import java.util.function.BiConsumer;
 
-public class TheStudio {
+public class TheStudio implements Studio {
 
-    volatile Consumer<Message> defaultMessageFailure = (m) -> {};
+    private volatile Consumer<Object> defaultMessageFailure = (m) -> {
+        throw new MaximumMessagesException(String.format("Too many messages; message was: %s", m));
+    };
 
-    volatile ExecutorService defaultIoExecutor = Executors.newCachedThreadPool(StudioThreads.factory(true));
+    private volatile Consumer<Exception> onEventFail = (e) -> e.printStackTrace();
+
+    private volatile ExecutorService defaultIoExecutor = Executors.newCachedThreadPool(StudioThreads.factory(true));
     
-    volatile ExecutorService defaultComputeExecutor = new ForkJoinPool(Runtime.getRuntime().availableProcessors(),
-                                                                       StudioThreads.factory(),
-                                                                       null, true);
+    private volatile ExecutorService defaultComputeExecutor = new ForkJoinPool(Runtime.getRuntime().availableProcessors(),
+                                                                               StudioThreads.factory(),
+                                                                               null, true);
     
     private final ConcurrentHashMap<Object, Director> directors = new ConcurrentHashMap<>();
 
     private Director find(final Object key) {
         final Director director = directors.get(key);
         if(director == null) {
-            throw new IllegalStateException("Director has not been configured to handle %s", message.studioId());
+            throw new NotFoundInStudioException(String.format("Director has not been configured to handle %s", key));
         }
 
         return director;
     }
     
-    public void message(final Message message) {
-        find(message.studioId()).messageReady(message);
+    public <T> T find(final Object id, final Class<T> type) {
+        final Director d = directors.get(id);
+        if(d != null) {
+            return type.cast(d.exemplar());
+        }
+        else {
+            final String message = String.format("Did not find actor/agent with id %s and type %s", id, type);
+            throw new NotFoundInStudioException(message);
+        }
     }
 
-    public void resource(final StudioId o) {
-        find(message.studioId()).messageReady(message);
+    //TODO: Make more like this
+    public <T, M extends Permanent<M>> void event(final Object id, final Class<T> targetType,
+                                                  final BiConsumer<T,M> eventConsumer, final M message) {
+        final M permanent = message.permanent();
+        find(id).messageReady((o) -> {
+                try {
+                    eventConsumer.accept(targetType.cast(o), permanent);
+                }
+                catch(Exception e) {
+                    onEventFail.accept(e);
+                }
+            });
+    }
+
+    public <T, M extends Permanent<M>> CompletableFuture<Void> eventMessage(final Object id, final Class<T> targetType,
+                                                                            final BiConsumer<T,M> eventConsumer,
+                                                                            final M message) {
+        final M permanent = message.permanent();
+        final CompletableFuture<Void> future = new CompletableFuture<>();
+        
+        find(id).messageReady((o) -> {
+                try {
+                    eventConsumer.accept(targetType.cast(o), permanent);
+                    future.complete(null);
+                }
+                catch(Throwable t) {
+                    future.completeExceptionally(t);
+                }
+            });
+
+        return future;
+    }
+
+    public <T, M extends Permanent<M>> CompletableFuture<Boolean> message(final Object id, final Class<T> targetType,
+                                                                          final ToBooleanBiFunction<T,M> function,
+                                                                          final M message) {
+        final M permanent = message.permanent();
+        final CompletableFuture<Boolean> future = new CompletableFuture<>();
+
+        find(id).messageReady((o) -> {
+                try {
+                    future.complete(function.applyAsBoolean(targetType.cast(o), permanent));
+                }
+                catch(Throwable t) {
+                    future.completeExceptionally(t);
+                }
+            });
+
+        return future;
+    }
+    
+    public <T, M extends Permanent<M>> CompletableFuture<Byte> message(final Object id, final Class<T> targetType,
+                                                                       final ToByteBiFunction<T,M> function,
+                                                                       final M message) {
+        final M permanent = message.permanent();
+        final CompletableFuture<Byte> future = new CompletableFuture<>();
+
+        find(id).messageReady((o) -> {
+                try {
+                    future.complete(function.applyAsByte(targetType.cast(o), permanent));
+                }
+                catch(Throwable t) {
+                    future.completeExceptionally(t);
+                }
+            });
+
+        return future;
+    }
+    
+    public <T, M extends Permanent<M>> CompletableFuture<Short> message(final Object id, final Class<T> targetType,
+                                                                        final ToShortBiFunction<T,M> function,
+                                                                        final M message) {
+        final M permanent = message.permanent();
+        final CompletableFuture<Short> future = new CompletableFuture<>();
+
+        find(id).messageReady((o) -> {
+                try {
+                    future.complete(function.applyAsShort(targetType.cast(o), permanent));
+                }
+                catch(Throwable t) {
+                    future.completeExceptionally(t);
+                }
+            });
+
+        return future;
+    }
+
+    public <T, M extends Permanent<M>> CompletableFuture<Integer> message(final Object id, final Class<T> targetType,
+                                                                          final ToIntBiFunction<T,M> function,
+                                                                          final M message) {
+        final M permanent = message.permanent();
+        final CompletableFuture<Integer> future = new CompletableFuture<>();
+
+        find(id).messageReady((o) -> {
+                try {
+                    future.complete(function.applyAsInt(targetType.cast(o), permanent));
+                }
+                catch(Throwable t) {
+                    future.completeExceptionally(t);
+                }
+            });
+        
+        return future;
     }
 
     public void singleton(final StudioId actor) {
@@ -55,17 +169,12 @@ public class TheStudio {
     }
 
     public void singleton(final StudioId actor, final StudioContract contract) {
-        messagesResources.computeIfAbsent(actor.studioId(), (k) -> {
-                return new SingleDirector(this, contract, actor);
-            });
+        directors.computeIfAbsent(actor.studioId(), (k) -> new SingleDirector(this, contract, actor));
     }
 
     public void singleton(final StudioId actor, final ExecutorService executor) {
-        messagesResources.computeIfAbsent(actor.studioId(), (k) -> {
-                final Director d = new SingleDirector(this, StudioContract.UNKNOWN);
-                d.setExecutor(executor);
-                return d;
-            });
+        directors.computeIfAbsent(actor.studioId(),
+                                  (k) -> new SingleDirector(this, StudioContract.UNKNOWN, actor).setExecutor(executor));
     }
 
     public void fixed(final StudioId actor, final int num, final Supplier<StudioId> supplier) {
@@ -73,24 +182,14 @@ public class TheStudio {
     }
 
     public void fixed(final StudioId actor, final int num,
-                      final Supplier<StudioId> supplier, final StudioContract studioExecution) {
-        messagesResources.computeIfAbsent(actor.studioId(), (k) -> {
-                return new QueuePair(new MaxSizeQueue<>(num, supplier), studioExecution);
-            });
+                      final Supplier<StudioId> supplier, final StudioContract contract) {
+        directors.computeIfAbsent(actor.studioId(), (k) -> new FixedDirectors(this, contract, num, supplier));
     }
 
     public void fixed(final StudioId actor, final int num, final Supplier<StudioId> supplier, final ExecutorService executor) {
-        messagesResources.computeIfAbsent(actor.studioId(), (k) -> {
-                return new QueuePair(new MaxSizeQueue<>(num, supplier), executor, StudioContract.UNKNOWN);
-            });
+        directors.computeIfAbsent(actor.studioId(),
+                                  (k) -> new FixedDirectors(this, StudioContract.UNKNOWN, num, supplier).setExecutor(executor));
     }
-
-    private final Consumer<StudioId> growableConsumer = (newActor) -> {
-            messagesResources.computeIfPresent(newActor.studioId(), (id, pair) -> {
-                    pair.addResource(newActor);
-                    return pair;
-                });
-        };
 
     public void growable(final StudioId actor, final int max, final int maxWaiters,
                          final Supplier<StudioId> supplier) {
@@ -98,59 +197,41 @@ public class TheStudio {
     }
 
     public void growable(final StudioId actor, final int max, final int maxWaiters,
-                         final Supplier<StudioId> supplier, final StudioContract studioExecution) {
-        final ExecutorService executor = (studioExecution == StudioContract.COMPUTE ?
-                                          defaultComputeExecutor :
-                                          defaultIoExecutor);
-        
-        messagesResources.computeIfAbsent(actor.studioId(), (k) -> {
-                return new QueuePair(new ResourceQueue<>(max, maxWaiters, supplier, executor, growableConsumer),
-                                     studioExecution);
-            });
+                         final Supplier<StudioId> supplier, final StudioContract contract) {
+        directors.computeIfAbsent(actor.studioId(), (k) -> new GrowableDirectors(this, contract, max, supplier, maxWaiters));
     }
-
+    
     public void growable(final StudioId actor, final int max, final int maxWaiters,
                          final Supplier<StudioId> supplier, final ExecutorService executor) {
-        messagesResources.computeIfAbsent(actor.studioId(), (k) -> {
-                return new QueuePair(new ResourceQueue<>(max, maxWaiters, supplier, executor, growableConsumer),
-                                     executor, StudioContract.UNKNOWN);
-            });
+        directors.computeIfAbsent(actor.studioId(),
+                                  (k) -> new GrowableDirectors(this, StudioContract.UNKNOWN, max, supplier, maxWaiters).setExecutor(executor));
     }
 
-    public void onAddMessageFailure(final Object id, final Consumer<Message> consumer) {
-        messagesResources.computeIfPresent(id, (k,pair) -> {
-                pair.setAddMessageFailure(consumer);
-                return pair;
-            });
+    public void messageFailure(final Object id, final Consumer<Object> consumer) {
+        directors.computeIfPresent(id, (k,d) -> d.setMessageFailure(consumer));
     }
 
-    public Consumer<Message> onAddMessageFailure(final Object id) {
-        final QueuePair pair = messagesResources.get(id);
-        return pair == null ? null : pair.getAddMessageFailure();
+    public Consumer<Object> messageFailure(final Object id) {
+        final Director d = directors.get(id);
+        return d == null ? null : d.getMessageFailure();
     }
 
     public void maxWaitingMessages(final Object id, final int max) {
-        messagesResources.computeIfPresent(id, (k, pair) -> {
-                pair.setMaxWaitingMessages(max);
-                return pair;
-            });
+        directors.computeIfPresent(id, (k, d) -> d.setMaxWaitingMessages(max));
     }
 
     public int maxWaitingMessages(final Object id) {
-        final QueuePair pair = messagesResources.get(id);
-        return pair == null ? null : pair.getMaxWaitingMessages();
+        final Director d = directors.get(id);
+        return d == null ? null : d.getMaxWaitingMessages();
     }
 
     public void executor(final Object id, final ExecutorService executor) {
-        messagesResources.computeIfPresent(id, (k, pair) -> {
-                pair.setExecutor(executor);
-                return pair;
-            });
+        directors.computeIfPresent(id, (k, d) -> d.setExecutor(executor));
     }
 
     public ExecutorService executor(final Object id) {
-        final QueuePair pair = messagesResources.get(id);
-        return pair == null ? null : pair.getExecutor();
+        final Director d = directors.get(id);
+        return d == null ? null : d.getExecutor();
     }
 
     public ExecutorService getDefaultIoExecutor() {
@@ -169,8 +250,11 @@ public class TheStudio {
         this.defaultComputeExecutor = val;
     }
 
-    public <T> T find(final Object id, final Class<T> type) {
-        final QueuePair pair = messagesResources.get(id);
-        return pair != null ? type.cast(pair.resources.exemplar()) : null;
+    public Consumer<Object> getDefaultMessageFailure() {
+        return defaultMessageFailure;
+    }
+
+    public void setDefaultMessageFailure(final Consumer<Object> val) {
+        defaultMessageFailure = val;
     }
 }
