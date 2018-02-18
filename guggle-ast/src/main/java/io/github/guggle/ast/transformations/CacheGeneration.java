@@ -9,11 +9,13 @@ import java.util.function.*;
 import io.github.guggle.api.*;
 import io.github.guggle.utils.*;
 
-class CacheGeneration extends BaseGeneration {
+class CacheGeneration extends AbstractGeneration {
 
     final String functionClassName;
     final String forwardingMethodName;
     final ConstructorCallExpression lifetimeConstructorCall;
+    final ClassNode returnType;
+    final Parameter[] parameters;
     
     MethodNode forwardingMethodNode;
     InnerClassNode functionNode;
@@ -25,11 +27,17 @@ class CacheGeneration extends BaseGeneration {
     
     public CacheGeneration(final MethodNode methodNode, final ConstructorCallExpression lifetimeConstructorCall) {
         super(methodNode);
+        this.returnType = methodNode.getReturnType();
+        this.parameters = methodNode.getParameters();
         this.lifetimeConstructorCall = lifetimeConstructorCall;
         this.forwardingMethodName = fieldName("_", "");
         this.functionFieldName = fieldName("", "Function");
         this.functionClassName = className("Function");
         this.cacheFieldName = fieldName("", "Cache");
+    }
+    
+    protected final String fieldName(final String prefix, final String suffix) {
+        return prefix + methodName + suffix;
     }
 
     public Expression getTemporaryCode() {
@@ -126,42 +134,42 @@ class CacheGeneration extends BaseGeneration {
             if(returnType == ClassHelper.boolean_TYPE) {
                 _methodName = "applyAsBoolean";
                 final ClassNode tmp = ClassHelper.make(ToBooleanFunction.class);
-                _classNode = GenericsUtils.makeClassSafeWithGenerics(tmp, new GenericsType(baseNode));
+                _classNode = GenericsUtils.makeClassSafeWithGenerics(tmp, new GenericsType(getBaseNode()));
             }
             else if(returnType == ClassHelper.byte_TYPE) {
                 _methodName = "applyAsByte";
                 final ClassNode tmp = ClassHelper.make(ToByteFunction.class);
-                _classNode = GenericsUtils.makeClassSafeWithGenerics(tmp, new GenericsType(baseNode));
+                _classNode = GenericsUtils.makeClassSafeWithGenerics(tmp, new GenericsType(getBaseNode()));
             }
             else if(returnType == ClassHelper.short_TYPE) {
                 _methodName = "applyAsShort";
                 final ClassNode tmp = ClassHelper.make(ToShortFunction.class);
-                _classNode = GenericsUtils.makeClassSafeWithGenerics(tmp, new GenericsType(baseNode));
+                _classNode = GenericsUtils.makeClassSafeWithGenerics(tmp, new GenericsType(getBaseNode()));
             }
             else if(returnType == ClassHelper.int_TYPE) {
                 _methodName = "applyAsInt";
                 final ClassNode tmp = ClassHelper.make(ToIntFunction.class);
-                _classNode = GenericsUtils.makeClassSafeWithGenerics(tmp, new GenericsType(baseNode));
+                _classNode = GenericsUtils.makeClassSafeWithGenerics(tmp, new GenericsType(getBaseNode()));
             }
             else if(returnType == ClassHelper.long_TYPE) {
                 _methodName = "applyAsLong";
                 final ClassNode tmp = ClassHelper.make(ToLongFunction.class);
-                _classNode = GenericsUtils.makeClassSafeWithGenerics(tmp, new GenericsType(baseNode));
+                _classNode = GenericsUtils.makeClassSafeWithGenerics(tmp, new GenericsType(getBaseNode()));
             }
             else if(returnType == ClassHelper.float_TYPE) {
                 _methodName = "applyAsFloat";
                 final ClassNode tmp = ClassHelper.make(ToFloatFunction.class);
-                _classNode = GenericsUtils.makeClassSafeWithGenerics(tmp, new GenericsType(baseNode));
+                _classNode = GenericsUtils.makeClassSafeWithGenerics(tmp, new GenericsType(getBaseNode()));
             }
             else if(returnType == ClassHelper.double_TYPE) {
                 _methodName = "applyAsDouble";
                 final ClassNode tmp = ClassHelper.make(ToDoubleFunction.class);
-                _classNode = GenericsUtils.makeClassSafeWithGenerics(tmp, new GenericsType(baseNode));
+                _classNode = GenericsUtils.makeClassSafeWithGenerics(tmp, new GenericsType(getBaseNode()));
             }
             else {
                 _methodName = "apply";
                 final ClassNode tmp = ClassHelper.makeWithoutCaching(Function.class);
-                _classNode = GenericsUtils.makeClassSafeWithGenerics(tmp, new GenericsType(baseNode), new GenericsType(copy(returnType)));
+                _classNode = GenericsUtils.makeClassSafeWithGenerics(tmp, new GenericsType(getBaseNode()), new GenericsType(copy(returnType)));
             }
         }
         
@@ -179,13 +187,13 @@ class CacheGeneration extends BaseGeneration {
             }
             
             _cacheFactoryArgs = new ArgumentListExpression();
-            final FieldNode methodIdFieldNode = baseNode.getFields().stream().filter(f -> f.getName().equals("METHOD_ID")).findFirst().get();
+            final FieldNode methodIdFieldNode = getBaseNode().getFields().stream().filter(f -> f.getName().equals("METHOD_ID")).findFirst().get();
             if(methodIdFieldNode == null) {
                 addError("Could not find METHOD_ID field", methodNode);
             }
             
             final FieldExpression methodIdFieldExpr = new FieldExpression(methodIdFieldNode);
-            _cacheFactoryArgs.addExpression(classX(baseNode));
+            _cacheFactoryArgs.addExpression(classX(getBaseNode()));
             _cacheFactoryArgs.addExpression(methodIdFieldExpr);
             _cacheFactoryArgs.addExpression(fieldX(functionFieldNode));
             _cacheFactoryArgs.addExpression(lifetimeConstructorCall);
@@ -195,25 +203,25 @@ class CacheGeneration extends BaseGeneration {
                returnType == ClassHelper.short_TYPE ||
                returnType == ClassHelper.int_TYPE) {
                 _cacheMethodName = "intView";
-                GenericsType[] generics = new GenericsType[] { new GenericsType(baseNode) };
+                GenericsType[] generics = new GenericsType[] { new GenericsType(getBaseNode()) };
                 _cacheTypeNode = GenericsUtils.makeClassSafeWithGenerics(ClassHelper.makeWithoutCaching(IntCacheView.class, false), generics);
             }
             else if(returnType == ClassHelper.long_TYPE) {
                 _cacheMethodName = "longView";
-                GenericsType[] generics = new GenericsType[] { new GenericsType(baseNode) };
+                GenericsType[] generics = new GenericsType[] { new GenericsType(getBaseNode()) };
                 _cacheTypeNode = GenericsUtils.makeClassSafeWithGenerics(ClassHelper.makeWithoutCaching(LongCacheView.class, false), generics);
             }
             else if(returnType == ClassHelper.float_TYPE ||
                     returnType == ClassHelper.double_TYPE) {
                 _cacheMethodName = "doubleView";
-                GenericsType[] generics = new GenericsType[] { new GenericsType(baseNode) };
+                GenericsType[] generics = new GenericsType[] { new GenericsType(getBaseNode()) };
                 _cacheTypeNode = GenericsUtils.makeClassSafeWithGenerics(ClassHelper.makeWithoutCaching(DoubleCacheView.class, false), generics);
             }
             else {
                 _cacheMethodName = "objectView";
                 _cacheFactoryArgs.addExpression(classX(returnType));
                 GenericsType[] generics = new GenericsType[2];
-                generics[0] = new GenericsType(baseNode);
+                generics[0] = new GenericsType(getBaseNode());
                 generics[1] = new GenericsType(copy(returnType));
                 _cacheTypeNode = GenericsUtils.makeClassSafeWithGenerics(ClassHelper.makeWithoutCaching(ObjectCacheView.class, false), generics);
             }
@@ -227,7 +235,7 @@ class CacheGeneration extends BaseGeneration {
         this.forwardingMethodNode = new MethodNode(forwardingMethodName, modifiers,
                                                    copy(returnType), cloneParams(parameters),
                                                    ClassNode.EMPTY_ARRAY, methodNode.getCode());
-        outerClassNode.addMethod(forwardingMethodNode);
+        targetClassNode.addMethod(forwardingMethodNode);
         methodNode.setCode(returnS(getTemporaryCode()));
     }
 
@@ -241,28 +249,28 @@ class CacheGeneration extends BaseGeneration {
     }
 
     void functionClass() {
-        this.functionNode = new InnerClassNode(outerClassNode, functionClassName,
+        this.functionNode = new InnerClassNode(targetClassNode, functionClassName,
                                                ACC_PUBLIC | ACC_STATIC,
                                                ClassHelper.OBJECT_TYPE);
         
         functionNode.addInterface(cacheInfo.getClassNode());
 
         final Parameter[] functionParameters = new Parameter[1];
-        functionParameters[0] = new Parameter(baseNode, "val");
+        functionParameters[0] = new Parameter(getBaseNode(), "val");
         functionParameters[0].setModifiers(ACC_FINAL);
         
         final ArgumentListExpression alist = new ArgumentListExpression();
         for(int i = 0; i < parameters.length; ++i) {
-            final String theName = "m" + i;
-            final MethodCallExpression mcall = new MethodCallExpression(varX(functionParameters[0]), theName, ArgumentListExpression.EMPTY_ARGUMENTS);
+            final FieldInfo fi = fieldInfos[i];
+            final MethodCallExpression mcall = new MethodCallExpression(varX(functionParameters[0]), fi.getGetterName(), ArgumentListExpression.EMPTY_ARGUMENTS);
             mcall.setImplicitThis(false);
-            mcall.setMethodTarget(baseNode.getMethods().stream().filter(m -> m.getName().equals(theName)).findFirst().get());
+            mcall.setMethodTarget(getBaseNode().getMethods().stream().filter(m -> m.getName().equals(fi.getGetterName())).findFirst().get());
             alist.addExpression(mcall);
         }
 
-        final ClassNode copied = copy(outerClassNode);
+        final ClassNode copied = copy(targetClassNode);
         if(methodNode.isStatic()) {
-            StaticMethodCallExpression mcall = new StaticMethodCallExpression(outerClassNode, forwardingMethodName, alist);
+            StaticMethodCallExpression mcall = new StaticMethodCallExpression(targetClassNode, forwardingMethodName, alist);
             functionNode.addMethod(new MethodNode(cacheInfo.getMethodName(), ACC_PUBLIC, returnType,
                                                   functionParameters, ClassNode.EMPTY_ARRAY, returnS(mcall)));
         }
@@ -281,7 +289,7 @@ class CacheGeneration extends BaseGeneration {
             final MethodCallExpression mcall = new MethodCallExpression(fexpr, forwardingMethodName, alist);
             mcall.setImplicitThis(false);
             mcall.setMethodTarget(forwardingMethodNode);
-            mcall.setGenericsTypes(new GenericsType[] { new GenericsType(baseNode) });
+            mcall.setGenericsTypes(new GenericsType[] { new GenericsType(getBaseNode()) });
             functionNode.addMethod(new MethodNode(cacheInfo.getMethodName(), ACC_PUBLIC, returnType,
                                                   functionParameters, ClassNode.EMPTY_ARRAY, returnS(mcall)));
         }
@@ -294,14 +302,14 @@ class CacheGeneration extends BaseGeneration {
         
         if(methodNode.isStatic()) {
             this.functionFieldNode = new FieldNode(functionFieldName, ACC_PRIVATE | ACC_STATIC | ACC_FINAL,
-                                                   functionNode, outerClassNode, new ConstructorCallExpression(functionNode, ArgumentListExpression.EMPTY_ARGUMENTS));
-            outerClassNode.addField(functionFieldNode);
+                                                   functionNode, targetClassNode, new ConstructorCallExpression(functionNode, ArgumentListExpression.EMPTY_ARGUMENTS));
+            targetClassNode.addField(functionFieldNode);
         }
         else {
             this.functionFieldNode = new FieldNode(functionFieldName, ACC_PRIVATE | ACC_FINAL,
-                                                   functionNode, outerClassNode,
+                                                   functionNode, targetClassNode,
                                                    new ConstructorCallExpression(functionNode, args(varX("this"))));
-            outerClassNode.addField(functionFieldNode);
+            targetClassNode.addField(functionFieldNode);
         }
     }
     
@@ -327,9 +335,9 @@ class CacheGeneration extends BaseGeneration {
         mcall.setImplicitThis(false);
         this.cacheFieldNode = new FieldNode(cacheFieldName, modifiers,
                                             cacheInfo.getCacheTypeNode(),
-                                            outerClassNode,
+                                            targetClassNode,
                                             mcall);
-        outerClassNode.addField(cacheFieldNode);
+        targetClassNode.addField(cacheFieldNode);
     }
     
     @Override

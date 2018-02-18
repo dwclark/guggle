@@ -1,72 +1,93 @@
 package io.github.guggle.ast.transformations;
 
-import io.github.guggle.api.Permanent;
 import io.github.guggle.api.MethodId;
+import io.github.guggle.api.Permanent;
 import io.github.guggle.utils.*;
+import java.util.Arrays;
+import java.util.List;
 import org.codehaus.groovy.ast.*;
 import org.codehaus.groovy.ast.builder.*;
 import org.codehaus.groovy.ast.expr.*;
 import org.codehaus.groovy.ast.stmt.*;
+import org.codehaus.groovy.ast.tools.GenericsUtils;
 import org.codehaus.groovy.classgen.VariableScopeVisitor;
 import org.codehaus.groovy.control.CompilePhase;
 import org.codehaus.groovy.control.SourceUnit;
 import org.codehaus.groovy.syntax.*;
 import org.codehaus.groovy.transform.*;
 import static org.codehaus.groovy.ast.tools.GeneralUtils.*;
-import org.codehaus.groovy.ast.tools.GenericsUtils;
 
-public class BaseGeneration extends AbstractASTTransformation {
+public class SearchImmutableGeneration extends AbstractASTTransformation {
 
-    final String F_PREFIX = "f";
-    final String M_PREFIX = "m";
     final String A_PREFIX = "a";
+
+    final FieldInfo[] fieldInfos;
+    final ClassNode targetClassNode;
+    final String targetClassName;
     
-    final MethodNode methodNode;
-    final ClassNode returnType;
-    final Parameter[] parameters;
-    final String methodName;
-    final ClassNode outerClassNode;
-    final String outerClassName;
-    final String outerClassNameNP;
-
-    final String baseClassName;
-    final String searchClassName;
-    final String immutableClassName;
-
-    InnerClassNode baseNode;
     InnerClassNode immutableNode;
     InnerClassNode searchNode;
     
-    public BaseGeneration(final MethodNode methodNode) {
-        this.methodNode = methodNode;
-        this.returnType = methodNode.getReturnType();
-        this.parameters = methodNode.getParameters();
-        this.methodName = methodNode.getName();
-        this.outerClassNode = methodNode.getDeclaringClass();
-        this.outerClassName = outerClassNode.getName();
-        this.outerClassNameNP = outerClassNode.getNameWithoutPackage();
+    public SearchImmutableGeneration(final ClassNode targetClassNode,
+                                     final FieldInfo[] fieldInfos) {
+        this.targetClassNode = targetClassNode;
+        this.targetClassName = targetClassNode.getName();
+        this.fieldInfos = fieldInfos;
+    }
 
-        this.baseClassName = className("Base");
-        this.searchClassName = className("Search");
-        this.immutableClassName = className("Immutable");
+    public SearchImmutableGeneration(final ClassNode targetClassNode) {
+        this(targetClassNode, FieldInfo.from(targetClassNode));
+    }
+    
+    public void visit(final ASTNode[] nodes, final SourceUnit unit) {
+        throw new UnsupportedOperationException("Not really an ast transformation, this is a convenient/safe" +
+                                                "way to get access to the Opcodes");
+    }
+
+    public String getMutableClassName() {
+        return targetClassName + "$Mutable";
+    }
+
+    public String getImmutableClassName() {
+        return targetClassName +"$Immutable";
     }
 
     public void pre() { }
     
     public void generate() {
-        abstractBaseClass();
+        enhanceAbstract();
         immutableClass();
         searchClass();
     }
     
     public void post() { }
-    
-    protected final String className(final String suffix) {
-        return outerClassName + "$" + methodName.substring(0,1).toUpperCase() + methodName.substring(1) + suffix;
+
+    public ClassNode getBaseNode() {
+        return targetClassNode;
     }
-    
-    protected final String fieldName(final String prefix, final String suffix) {
-        return prefix + methodName + suffix;
+
+    public MethodNode[] getAbstractAccessors() {
+        int count = 0;
+        for(MethodNode mn : getBaseNode().getMethods()) {
+            if(mn.isAbstract() && FieldInfo.isAccessor(mn)) {
+                ++count;
+            }
+        }
+
+        MethodNode[] ret = new MethodNode[count];
+        for(int i = 0; i < getBaseNode().getMethods().size(); ++i) {
+            final MethodNode mn = getBaseNode().getMethods().get(i);
+            if(mn.isAbstract() && FieldInfo.isAccessor(mn)) {
+                ret[i] = mn;
+            }
+        }
+
+        return ret;
+    }
+
+    public static boolean existsMethod(final ClassNode classNode, final String name) {
+        List<MethodNode> list = classNode.getDeclaredMethods(name);
+        return list != null && list.size() > 0;
     }
 
     public static ClassNode copy(final ClassNode classNode) {
@@ -109,40 +130,14 @@ public class BaseGeneration extends AbstractASTTransformation {
         return copied;
     }
 
-    public void visit(final ASTNode[] nodes, final SourceUnit unit) {
-        throw new UnsupportedOperationException("Not really an ast transformation, this is a convenient/safe" +
-                                                "way to get access to the Opcodes");
-    }
-
-    ClassNode[] getParameterTypes() {
-        final ClassNode[] ret = new ClassNode[parameters.length];
-        for(int i = 0; i < parameters.length; ++i) {
-            ret[i] = parameters[i].getType();
-        }
-
-        return ret;
-    }
-
     FieldNode[] addFieldNodes(final ClassNode owner, final boolean immutable) {
-        final ClassNode[] types = getParameterTypes();
-        final FieldNode[] ret = new FieldNode[types.length];
-        for(int i = 0; i < types.length; ++i) {
+        final FieldNode[] ret = new FieldNode[fieldInfos.length];
+        for(int i = 0; i < fieldInfos.length; ++i) {
+            final FieldInfo fi = fieldInfos[i];
             final int modifiers = immutable ? (ACC_PRIVATE | ACC_FINAL) : ACC_PRIVATE;
             //MUY IMPORTANTE! Uninitialized fields should get null not an empty expression
-            ret[i] = new FieldNode(F_PREFIX + i, modifiers, copy(types[i]), owner, null);
+            ret[i] = new FieldNode(fi.getFieldName(), modifiers, copy(fi.getType()), owner, null);
             owner.addField(ret[i]);
-        }
-
-        return ret;
-    }
-
-    MethodNode[] addAbstractAccessors(final ClassNode owner) {
-        final ClassNode[] types = getParameterTypes();
-        final MethodNode[] ret = new MethodNode[types.length];
-        for(int i = 0; i < types.length; ++i) {
-            ret[i] = new MethodNode(M_PREFIX + i, ACC_PUBLIC | ACC_ABSTRACT, copy(types[i]),
-                                    Parameter.EMPTY_ARRAY, ClassNode.EMPTY_ARRAY, EmptyStatement.INSTANCE);
-            owner.addMethod(ret[i]);
         }
 
         return ret;
@@ -151,12 +146,14 @@ public class BaseGeneration extends AbstractASTTransformation {
     MethodNode[] addAccessors(final ClassNode owner, final FieldNode[] fieldNodes) {
         final MethodNode[] ret = new MethodNode[fieldNodes.length];
         for(int i = 0; i < fieldNodes.length; ++i) {
-            ret[i] = new MethodNode(M_PREFIX + i, ACC_PUBLIC, copy(fieldNodes[i].getType()),
+            final FieldNode fn = fieldNodes[i];
+            final FieldInfo fi = Arrays.stream(fieldInfos).filter(f -> f.getFieldName().equals(fn.getName())).findFirst().get();
+            ret[i] = new MethodNode(fi.getGetterName(), ACC_PUBLIC, copy(fieldNodes[i].getType()),
                                     Parameter.EMPTY_ARRAY, ClassNode.EMPTY_ARRAY,
                                     returnS(fieldX(fieldNodes[i])));
             owner.addMethod(ret[i]);
         }
-
+        
         return ret;
     }
 
@@ -188,6 +185,17 @@ public class BaseGeneration extends AbstractASTTransformation {
         return methodNode;
     }
 
+    void addSetters(final ClassNode owner, final FieldNode[] fieldNodes) {
+        for(int i = 0; i < fieldNodes.length; ++i) {
+            final FieldNode fn = fieldNodes[i];
+            final FieldInfo fi = Arrays.stream(fieldInfos).filter(f -> f.getFieldName().equals(fn.getName())).findFirst().get();
+            BlockStatement body = block(assignS(fieldX(fn), varX("val")));
+            Parameter p = new Parameter(copy(fn.getType()), "val");
+            owner.addMethod(new MethodNode(fi.getSetterName(), ACC_PUBLIC, ClassHelper.VOID_TYPE,
+                                           new Parameter[] { p }, ClassNode.EMPTY_ARRAY, body));
+        }
+    }
+    
     ConstructorNode addConstructor(final ClassNode owner, final FieldNode[] fieldNodes) {
         final ConstructorNode cnode = new ConstructorNode(ACC_PUBLIC,
                                                           setterParameters(fieldNodes), ClassNode.EMPTY_ARRAY,
@@ -196,8 +204,16 @@ public class BaseGeneration extends AbstractASTTransformation {
         return cnode;
     }
 
-    MethodNode addEquals(final ClassNode thisNode, final MethodNode[] methodNodes) {
+    void addEquals() {
+        final ClassNode thisNode = getBaseNode();
+        if(existsMethod(thisNode, "equals")) {
+            return;
+        }
+        
+        final MethodNode[] methodNodes = getAbstractAccessors();
+        
         final ClassNode objectsNode = ClassHelper.makeWithoutCaching(java.util.Objects.class);
+        
         final String o = "o";
         final String rhs = "rhs";
         final BlockStatement block = new BlockStatement();
@@ -218,7 +234,12 @@ public class BaseGeneration extends AbstractASTTransformation {
             theirCall.setMethodTarget(mnode);
             
             if(ClassHelper.isPrimitiveType(mnode.getReturnType())) {
-                comparisons[i] = eqX(myCall, theirCall);
+                if(mnode.getReturnType() == ClassHelper.boolean_TYPE) {
+                    comparisons[i] = eqX(constX(0, true), new StaticMethodCallExpression(ClassHelper.Boolean_TYPE, "compare", args(myCall, theirCall)));
+                }
+                else {
+                    comparisons[i] = eqX(myCall, theirCall);
+                }
             }
             else {
                 comparisons[i] = new StaticMethodCallExpression(objectsNode, "equals", args(myCall, theirCall));
@@ -235,10 +256,17 @@ public class BaseGeneration extends AbstractASTTransformation {
                                                        params(param(ClassHelper.OBJECT_TYPE, o)), ClassNode.EMPTY_ARRAY,
                                                        block);
         thisNode.addMethod(equalsMethod);
-        return equalsMethod;
+        //return equalsMethod;
     }
 
-    MethodNode addHashCode(final ClassNode thisNode, final MethodNode[] methodNodes) {
+    void addHashCode() {
+        final ClassNode thisNode = getBaseNode();
+        if(existsMethod(thisNode, "hashCode")) {
+            return;
+        }
+        
+        final MethodNode[] methodNodes = getAbstractAccessors();
+        
         final ClassNode fnvNode = ClassHelper.makeWithoutCaching(Fnv.class);
         StaticMethodCallExpression firstCall = new StaticMethodCallExpression(fnvNode, "start", ArgumentListExpression.EMPTY_ARGUMENTS);
         MethodCallExpression nextCall = null;
@@ -285,43 +313,17 @@ public class BaseGeneration extends AbstractASTTransformation {
                                               Parameter.EMPTY_ARRAY, ClassNode.EMPTY_ARRAY,
                                               returnS(nextCall));
         thisNode.addMethod(ret);
-        return ret;
     }
 
-    public void abstractBaseClass() {
-        this.baseNode = new InnerClassNode(outerClassNode, baseClassName,
-                                           ACC_PUBLIC | ACC_STATIC | ACC_ABSTRACT,
-                                           ClassHelper.OBJECT_TYPE);
-
-        final ClassNode[] types = getParameterTypes();
-        final MethodNode[] accessors = addAbstractAccessors(baseNode);
-        addEquals(baseNode, accessors);
-        addHashCode(baseNode, accessors);
-        baseNode.addInterface(GenericsUtils.makeClassSafeWithGenerics(Permanent.class, baseNode));
-
-        final ClassNode methodIdNode = ClassHelper.makeWithoutCaching(MethodId.class);
-        final ArgumentListExpression ctorArgs = new ArgumentListExpression();
-        ctorArgs.addExpression(classX(copy(outerClassNode)));
-        ctorArgs.addExpression(constX(methodName));
-        final ListExpression typeList = new ListExpression();
-        for(ClassNode type : types) {
-            typeList.addExpression(classX(type));
-        }
-        ctorArgs.addExpression(typeList);
-        
-        final FieldNode methodIdField = new FieldNode("METHOD_ID", ACC_PUBLIC | ACC_STATIC | ACC_FINAL,
-                                                      methodIdNode, baseNode,
-                                                      ctorX(methodIdNode, ctorArgs));
-        baseNode.addField(methodIdField);
-        baseNode.addMethod(new MethodNode("getMethodId", ACC_PUBLIC, methodIdNode,
-                                          Parameter.EMPTY_ARRAY, ClassNode.EMPTY_ARRAY,
-                                          returnS(fieldX(methodIdField))));
-    }
-    
     public void immutableClass() {
-        this.immutableNode = new InnerClassNode(outerClassNode, immutableClassName,
-                                                ACC_PUBLIC | ACC_STATIC, baseNode);
-        final ClassNode[] types = getParameterTypes();
+        if(immutableNode == null) {
+            immutableNode = new InnerClassNode(targetClassNode, getImmutableClassName(),
+                                               ACC_PUBLIC | ACC_STATIC, getBaseNode());
+        }
+        else {
+            immutableNode.setSuperClass(getBaseNode());
+        }
+        
         final FieldNode[] fieldNodes = addFieldNodes(immutableNode, true);
         final MethodNode[] accessors = addAccessors(immutableNode, fieldNodes);
         final ConstructorNode constructor = addConstructor(immutableNode, fieldNodes);
@@ -330,13 +332,19 @@ public class BaseGeneration extends AbstractASTTransformation {
     }
 
     public void searchClass() {
-        this.searchNode = new InnerClassNode(outerClassNode, searchClassName,
-                                             ACC_PUBLIC | ACC_STATIC,
-                                             baseNode);
-        final ClassNode[] types = getParameterTypes();
+        if(searchNode == null) {
+            searchNode = new InnerClassNode(targetClassNode, getMutableClassName(),
+                                            ACC_PUBLIC | ACC_STATIC,
+                                            getBaseNode());
+        }
+        else {
+            searchNode.setSuperClass(getBaseNode());
+        }
+        
         final FieldNode[] fieldNodes = addFieldNodes(searchNode, false);
         final MethodNode[] accessors = addAccessors(searchNode, fieldNodes);
         final MethodNode setter = addSetter(searchNode, fieldNodes);
+        addSetters(searchNode, fieldNodes);
         
         final ArgumentListExpression fieldArgs = new ArgumentListExpression();
         for(FieldNode fnode : fieldNodes) {
@@ -346,5 +354,14 @@ public class BaseGeneration extends AbstractASTTransformation {
         searchNode.addMethod(new MethodNode("permanent", ACC_PUBLIC, immutableNode,
                                             Parameter.EMPTY_ARRAY, ClassNode.EMPTY_ARRAY,
                                             returnS(ctorX(immutableNode, fieldArgs))));
+    }
+
+    public void enhanceAbstract() {
+        addEquals();
+        addHashCode();
+        final ClassNode permClassNode = GenericsUtils.makeClassSafeWithGenerics(Permanent.class, getBaseNode());
+        if(!getBaseNode().implementsInterface(permClassNode)) {
+            getBaseNode().addInterface(permClassNode);
+        }
     }
 }

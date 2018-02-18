@@ -190,7 +190,7 @@ public class AllCaches implements CacheRegistry {
         }
 
         protected View<K,V> copy() {
-            return new View(keyType, backing, lifetime);
+            return new View<>(keyType, backing, lifetime);
         }
 
         public void dirty(final K key) {
@@ -475,7 +475,7 @@ public class AllCaches implements CacheRegistry {
                     v.lifetime = v.lifetime.toBuilder().merge(val).build();
                 }
                 else {
-                    configs.put(methodId, new View(null, defaultBacking, val));
+                    configs.put(methodId, new View<>(null, defaultBacking, val));
                 }
             });
                 
@@ -483,7 +483,7 @@ public class AllCaches implements CacheRegistry {
 
     public ConcurrentMap<Object,Object> backing(final MethodId methodId) {
         return withConfigLock((all, configs) -> {
-                final View v = all.get(methodId);
+                final View<?,?> v = all.get(methodId);
                 return v == null ? null : v.backing;
             });
     }
@@ -501,7 +501,7 @@ public class AllCaches implements CacheRegistry {
                     v.backing = val;
                 }
                 else {
-                    configs.put(methodId, new View(null, val, Lifetime.builder().build()));
+                    configs.put(methodId, new View<>(null, val, Lifetime.builder().build()));
                 }
             });
     }
@@ -549,7 +549,8 @@ public class AllCaches implements CacheRegistry {
     public <K extends Permanent<K>> DoubleCacheView<K> doubleView(Class<K> keyType, MethodId methodId, ToDoubleFunction<K> func, Lifetime lifetime) {
         return withConfigLock((all,configs) -> {
                 if(all.containsKey(methodId)) {
-                    return (DoubleView<K>) all.get(methodId);
+                    @SuppressWarnings("unchecked") DoubleView<K> existing = (DoubleView<K>) all.get(methodId);
+                    return existing;
                 }
 
                 DoubleView<K> ret = new DoubleView<>(keyType, resolveBacking(configs, methodId),
@@ -563,7 +564,8 @@ public class AllCaches implements CacheRegistry {
                                                             final ToIntFunction<K> func, final Lifetime lifetime) {
         return withConfigLock((all,configs) -> {
                 if(all.containsKey(methodId)) {
-                    return (IntView<K>) all.get(methodId);
+                    @SuppressWarnings("unchecked") IntView<K> existing = (IntView<K>) all.get(methodId);
+                    return existing;
                 }
 
                 IntView<K> ret = new IntView<>(keyType, resolveBacking(configs, methodId),
@@ -576,7 +578,8 @@ public class AllCaches implements CacheRegistry {
     public <K extends Permanent<K>> LongCacheView<K> longView(Class<K> keyType, MethodId methodId, ToLongFunction<K> func, Lifetime lifetime) {
         return withConfigLock((all,configs) -> {
                 if(all.containsKey(methodId)) {
-                    return (LongView<K>) all.get(methodId);
+                    @SuppressWarnings("unchecked") LongView<K> existing = (LongView<K>) all.get(methodId);
+                    return existing;
                 }
 
                 LongView<K> ret = new LongView<>(keyType, resolveBacking(configs, methodId),
@@ -590,7 +593,8 @@ public class AllCaches implements CacheRegistry {
                                                                        final Function<K,V> func, final Lifetime lifetime, final Class<V> valueType) {
         return withConfigLock((all,configs) -> {
                 if(all.containsKey(methodId)) {
-                    return (ObjectView<K,V>) all.get(methodId);
+                    @SuppressWarnings("unchecked") ObjectView<K,V> existing = (ObjectView<K,V>) all.get(methodId);
+                    return existing;
                 }
 
                 ObjectView<K,V> ret = new ObjectView<>(keyType, valueType, resolveBacking(configs, methodId),
