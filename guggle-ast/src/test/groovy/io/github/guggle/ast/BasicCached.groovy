@@ -64,4 +64,13 @@ class CacheValue1 extends TestCache {
         return ret;
     }
 
+    @Cache
+    public int multiplyNumbers(final int first, final int second){
+        def tuple = new Tuple(CacheValue1, 'multiplyNumbers', [first, second]);
+        int ret = first * second;
+        println("Called multiplyNumbers(${first},${second})");
+        testKey(tuple);
+        place(tuple, ret);
+        return ret;
+    }
 }
